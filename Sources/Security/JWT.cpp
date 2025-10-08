@@ -30,6 +30,8 @@
 #include <SerializationToolbox.h>
 #include <Toolbox.h>
 
+#include <boost/math/special_functions/round.hpp>
+
 
 JWT::JWT(const std::string& jwt)
 {
@@ -83,7 +85,7 @@ bool JWT::Verify(RSAPublicKey& key) const
       // The "exp" field can be either an integer or decimal, so we
       // deal with the worst case of a double
       const double doubleExp = payload_[FIELD_EXP].asDouble();
-      const int64_t exp = static_cast<int64_t>(llround(doubleExp));
+      const int64_t exp = static_cast<int64_t>(boost::math::llround(doubleExp));
       const int64_t now = time(NULL);
       return now < exp;
     }

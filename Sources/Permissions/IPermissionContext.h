@@ -30,6 +30,7 @@
 
 #include <boost/noncopyable.hpp>
 #include <map>
+#include <stdint.h>
 #include <vector>
 
 

@@ -30,6 +30,8 @@
 
 #include <boost/thread/shared_mutex.hpp>
 #include <boost/thread/lock_types.hpp>
+#include <stdint.h>
+
 
 class DocumentOrientedDatabase : public boost::noncopyable
 {

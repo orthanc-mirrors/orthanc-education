@@ -28,6 +28,7 @@
 #include "RSAPublicKey.h"
 
 #include <boost/thread/shared_mutex.hpp>
+#include <stdint.h>
 
 class PlatformKeysRegistry : public boost::noncopyable
 {
