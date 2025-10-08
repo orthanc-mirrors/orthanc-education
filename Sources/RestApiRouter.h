@@ -50,10 +50,10 @@ namespace RestApiRouter
   namespace Internals
   {
     template <AuthenticatedGetCallback Callback>
-    static inline void AuthenticatedGetCallbackWrapper(OrthancPluginRestOutput* output,
-                                                       const std::string& url,
-                                                       const OrthancPluginHttpRequest* request,
-                                                       const AuthenticatedUser& user)
+    inline void AuthenticatedGetCallbackWrapper(OrthancPluginRestOutput* output,
+                                                const std::string& url,
+                                                const OrthancPluginHttpRequest* request,
+                                                const AuthenticatedUser& user)
     {
       if (request->method != OrthancPluginHttpMethod_Get)
       {
@@ -67,10 +67,10 @@ namespace RestApiRouter
 
 
     template <AuthenticatedPostCallback Callback>
-    static inline void AuthenticatedPostCallbackWrapper(OrthancPluginRestOutput* output,
-                                                        const std::string& url,
-                                                        const OrthancPluginHttpRequest* request,
-                                                        const AuthenticatedUser& user)
+    inline void AuthenticatedPostCallbackWrapper(OrthancPluginRestOutput* output,
+                                                 const std::string& url,
+                                                 const OrthancPluginHttpRequest* request,
+                                                 const AuthenticatedUser& user)
     {
       if (request->method != OrthancPluginHttpMethod_Post)
       {
@@ -92,9 +92,9 @@ namespace RestApiRouter
 
 
     template <AuthenticatedRestCallback Callback>
-    static inline void PublicRestCallbackWrapper(OrthancPluginRestOutput* output,
-                                                 const char* url,
-                                                 const OrthancPluginHttpRequest* request)
+    inline void PublicRestCallbackWrapper(OrthancPluginRestOutput* output,
+                                          const char* url,
+                                          const OrthancPluginHttpRequest* request)
     {
       std::unique_ptr<AuthenticatedUser> user(AuthenticatedUser::CreateGuest());
       Callback(output, url, request, *user);
@@ -102,9 +102,9 @@ namespace RestApiRouter
 
 
     template <AuthenticatedRestCallback Callback>
-    static inline void AuthenticatedRestCallbackWrapper(OrthancPluginRestOutput* output,
-                                                        const char* url,
-                                                        const OrthancPluginHttpRequest* request)
+    inline void AuthenticatedRestCallbackWrapper(OrthancPluginRestOutput* output,
+                                                 const char* url,
+                                                 const OrthancPluginHttpRequest* request)
     {
       std::unique_ptr<AuthenticatedUser> user;
       if (request->authenticationPayloadSize == 0)
@@ -121,10 +121,10 @@ namespace RestApiRouter
 
 
     template <AuthenticatedRestCallback Callback>
-    static inline void AdministratorRouteWrapper(OrthancPluginRestOutput* output,
-                                                 const std::string& url,
-                                                 const OrthancPluginHttpRequest* request,
-                                                 const AuthenticatedUser& user)
+    inline void AdministratorRouteWrapper(OrthancPluginRestOutput* output,
+                                          const std::string& url,
+                                          const OrthancPluginHttpRequest* request,
+                                          const AuthenticatedUser& user)
     {
       if (user.GetRole() != Role_Administrator)
       {
@@ -147,58 +147,58 @@ namespace RestApiRouter
 
 
   template <AuthenticatedRestCallback Callback>
-  static void RegisterPublicRoute(const std::string& uri)
+  inline void RegisterPublicRoute(const std::string& uri)
   {
     RegisterRoute(uri, AuthorizationStatus_GrantedWithoutPayload,
                   OrthancPlugins::Internals::Protect< Internals::PublicRestCallbackWrapper<Callback> >);
   }
 
   template <AuthenticatedGetCallback Callback>
-  static void RegisterPublicGetRoute(const std::string& uri)
+  inline void RegisterPublicGetRoute(const std::string& uri)
   {
     RegisterPublicRoute< Internals::AuthenticatedGetCallbackWrapper<Callback> >(uri);
   }
 
   template <AuthenticatedPostCallback Callback>
-  static void RegisterPublicPostRoute(const std::string& uri)
+  inline void RegisterPublicPostRoute(const std::string& uri)
   {
     RegisterPublicRoute< Internals::AuthenticatedPostCallbackWrapper<Callback> >(uri);
   }
 
 
   template <AuthenticatedRestCallback Callback>
-  static void RegisterAuthenticatedRoute(const std::string& uri)
+  inline void RegisterAuthenticatedRoute(const std::string& uri)
   {
     RegisterRoute(uri, AuthorizationStatus_GrantedWithPayload,
                   OrthancPlugins::Internals::Protect< Internals::AuthenticatedRestCallbackWrapper<Callback> >);
   }
 
   template <AuthenticatedGetCallback Callback>
-  static void RegisterAuthenticatedGetRoute(const std::string& uri)
+  inline void RegisterAuthenticatedGetRoute(const std::string& uri)
   {
     RegisterAuthenticatedRoute< Internals::AuthenticatedGetCallbackWrapper<Callback> >(uri);
   }
 
   template <AuthenticatedPostCallback Callback>
-  static void RegisterAuthenticatedPostRoute(const std::string& uri)
+  inline void RegisterAuthenticatedPostRoute(const std::string& uri)
   {
     RegisterAuthenticatedRoute< Internals::AuthenticatedPostCallbackWrapper<Callback> >(uri);
   }
 
   template <AuthenticatedRestCallback Callback>
-  static void RegisterAdministratorRoute(const std::string& uri)
+  inline void RegisterAdministratorRoute(const std::string& uri)
   {
     RegisterAuthenticatedRoute< Internals::AdministratorRouteWrapper<Callback> >(uri);
   }
 
   template <AuthenticatedGetCallback Callback>
-  static void RegisterAdministratorGetRoute(const std::string& uri)
+  inline void RegisterAdministratorGetRoute(const std::string& uri)
   {
     RegisterAdministratorRoute< Internals::AuthenticatedGetCallbackWrapper<Callback> >(uri);
   }
 
   template <AuthenticatedPostCallback Callback>
-  static void RegisterAdministratorPostRoute(const std::string& uri)
+  inline void RegisterAdministratorPostRoute(const std::string& uri)
   {
     RegisterAdministratorRoute< Internals::AuthenticatedPostCallbackWrapper<Callback> >(uri);
   }

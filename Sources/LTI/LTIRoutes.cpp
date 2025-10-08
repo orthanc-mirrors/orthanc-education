@@ -60,10 +60,10 @@ static void CheckState(const std::map<std::string, std::string>& form,
 }
 
 
-static void ServeJwks(OrthancPluginRestOutput* output,
-                      const std::string& url,
-                      const OrthancPluginHttpRequest* request,
-                      const AuthenticatedUser& user)
+void ServeJwks(OrthancPluginRestOutput* output,
+               const std::string& url,
+               const OrthancPluginHttpRequest* request,
+               const AuthenticatedUser& user)
 {
   assert(user.GetRole() == Role_Guest);
 
@@ -93,10 +93,10 @@ static bool IsSameUrl(const std::string& a,
 }
 
 
-static void ServeOidc(OrthancPluginRestOutput* output,
-                      const std::string& url,
-                      const OrthancPluginHttpRequest* request,
-                      const AuthenticatedUser& user)
+void ServeOidc(OrthancPluginRestOutput* output,
+               const std::string& url,
+               const OrthancPluginHttpRequest* request,
+               const AuthenticatedUser& user)
 {
   assert(user.GetRole() == Role_Guest);
 
@@ -160,10 +160,10 @@ static void ServeOidc(OrthancPluginRestOutput* output,
 }
 
 
-static void ServeLaunch(OrthancPluginRestOutput* output,
-                        const std::string& url,
-                        const OrthancPluginHttpRequest* request,
-                        const AuthenticatedUser& guestUser)
+void ServeLaunch(OrthancPluginRestOutput* output,
+                 const std::string& url,
+                 const OrthancPluginHttpRequest* request,
+                 const AuthenticatedUser& guestUser)
 {
   assert(platformKeysRegistry_.get() != NULL);
   assert(guestUser.GetRole() == Role_Guest);
@@ -213,10 +213,10 @@ static void ServeLaunch(OrthancPluginRestOutput* output,
 }
 
 
-static void ServeDeep(OrthancPluginRestOutput* output,
-                      const std::string& url,
-                      const OrthancPluginHttpRequest* request,
-                      const AuthenticatedUser& guestUser)
+void ServeDeep(OrthancPluginRestOutput* output,
+               const std::string& url,
+               const OrthancPluginHttpRequest* request,
+               const AuthenticatedUser& guestUser)
 {
   assert(platformKeysRegistry_.get() != NULL);
   assert(guestUser.GetRole() == Role_Guest);
@@ -276,10 +276,10 @@ static void ServeDeep(OrthancPluginRestOutput* output,
 }
 
 
-static void ServeDeepJavaScript(OrthancPluginRestOutput* output,
-                                const std::string& url,
-                                const OrthancPluginHttpRequest* request,
-                                const AuthenticatedUser& user)
+void ServeDeepJavaScript(OrthancPluginRestOutput* output,
+                         const std::string& url,
+                         const OrthancPluginHttpRequest* request,
+                         const AuthenticatedUser& user)
 {
   assert(user.GetRole() == Role_Guest);
 
@@ -307,10 +307,10 @@ static void CheckUserPermission(const std::map<std::string, std::string>& args,
 }
 
 
-static void CreateDeepLink(OrthancPluginRestOutput* output,
-                           const std::string& url,
-                           const OrthancPluginHttpRequest* request,
-                           const AuthenticatedUser& user)
+void CreateDeepLink(OrthancPluginRestOutput* output,
+                    const std::string& url,
+                    const OrthancPluginHttpRequest* request,
+                    const AuthenticatedUser& user)
 {
   if (request->method != OrthancPluginHttpMethod_Post)
   {
@@ -381,10 +381,10 @@ static void CreateDeepLink(OrthancPluginRestOutput* output,
 
 
 
-static void RedirectToViewer(OrthancPluginRestOutput* output,
-                             const std::string& url,
-                             const OrthancPluginHttpRequest* request,
-                             const AuthenticatedUser& user)
+void RedirectToViewer(OrthancPluginRestOutput* output,
+                      const std::string& url,
+                      const OrthancPluginHttpRequest* request,
+                      const AuthenticatedUser& user)
 {
   if (request->method != OrthancPluginHttpMethod_Get)
   {
@@ -420,10 +420,10 @@ static void RedirectToViewer(OrthancPluginRestOutput* output,
 }
 
 
-static void ListProjectResourcesForLti(OrthancPluginRestOutput* output,
-                                       const std::string& url,
-                                       const OrthancPluginHttpRequest* request,
-                                       const AuthenticatedUser& user)
+void ListProjectResourcesForLti(OrthancPluginRestOutput* output,
+                                const std::string& url,
+                                const OrthancPluginHttpRequest* request,
+                                const AuthenticatedUser& user)
 {
   if (user.GetRole() == Role_Administrator)
   {
@@ -452,10 +452,10 @@ static void ListProjectResourcesForLti(OrthancPluginRestOutput* output,
 }
 
 
-static void ServeRegister(OrthancPluginRestOutput* output,
-                          const std::string& url,
-                          const OrthancPluginHttpRequest* request,
-                          const AuthenticatedUser& user)
+void ServeRegister(OrthancPluginRestOutput* output,
+                   const std::string& url,
+                   const OrthancPluginHttpRequest* request,
+                   const AuthenticatedUser& user)
 {
   assert(platformKeysRegistry_.get() != NULL);
   assert(user.GetRole() == Role_Guest);

@@ -37,9 +37,9 @@
 #include <cassert>
 
 
-static void ServeStaticAsset(OrthancPluginRestOutput* output,
-                             const char* url,
-                             const OrthancPluginHttpRequest* request)
+void ServeStaticAsset(OrthancPluginRestOutput* output,
+                      const char* url,
+                      const OrthancPluginHttpRequest* request)
 {
   if (request->method != OrthancPluginHttpMethod_Get)
   {

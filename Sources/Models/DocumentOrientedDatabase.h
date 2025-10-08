@@ -26,6 +26,8 @@
 
 #include "IDocumentUnserializer.h"
 
+#include <Compatibility.h>  // For std::unique_ptr<>
+
 #include <boost/thread/shared_mutex.hpp>
 #include <boost/thread/lock_types.hpp>
 

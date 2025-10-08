@@ -41,10 +41,10 @@
 static const char* const COOKIE_USER_AUTH = "orthanc-education-user";
 
 
-static void ServeWebApplication(OrthancPluginRestOutput* output,
-                                const std::string& url,
-                                const OrthancPluginHttpRequest* request,
-                                const AuthenticatedUser& user)
+void ServeWebApplication(OrthancPluginRestOutput* output,
+                         const std::string& url,
+                         const OrthancPluginHttpRequest* request,
+                         const AuthenticatedUser& user)
 {
   assert(user.GetRole() == Role_Guest);
 
@@ -65,11 +65,11 @@ static void ServeWebApplication(OrthancPluginRestOutput* output,
 }
 
 
-static void DoLogin(OrthancPluginRestOutput* output,
-                    const std::string& url,
-                    const OrthancPluginHttpRequest* request,
-                    const AuthenticatedUser& oldUser,
-                    const Json::Value& body)
+void DoLogin(OrthancPluginRestOutput* output,
+             const std::string& url,
+             const OrthancPluginHttpRequest* request,
+             const AuthenticatedUser& oldUser,
+             const Json::Value& body)
 {
   assert(oldUser.GetRole() == Role_Guest);
 
@@ -97,10 +97,10 @@ static void DoLogin(OrthancPluginRestOutput* output,
 }
 
 
-static void DoLogout(OrthancPluginRestOutput* output,
-                     const std::string& url,
-                     const OrthancPluginHttpRequest* request,
-                     const AuthenticatedUser& user)
+void DoLogout(OrthancPluginRestOutput* output,
+              const std::string& url,
+              const OrthancPluginHttpRequest* request,
+              const AuthenticatedUser& user)
 {
   assert(user.GetRole() == Role_Guest);
 
@@ -114,11 +114,11 @@ static void DoLogout(OrthancPluginRestOutput* output,
 }
 
 
-static void GenerateListProjectUrl(OrthancPluginRestOutput* output,
-                                   const std::string& url,
-                                   const OrthancPluginHttpRequest* request,
-                                   const AuthenticatedUser& user,
-                                   const Json::Value& body)
+void GenerateListProjectUrl(OrthancPluginRestOutput* output,
+                            const std::string& url,
+                            const OrthancPluginHttpRequest* request,
+                            const AuthenticatedUser& user,
+                            const Json::Value& body)
 {
   assert(user.GetRole() == Role_Guest);
 
@@ -142,11 +142,11 @@ static void GenerateListProjectUrl(OrthancPluginRestOutput* output,
 }
 
 
-static void GenerateViewerUrlFromResource(OrthancPluginRestOutput* output,
-                                          const std::string& url,
-                                          const OrthancPluginHttpRequest* request,
-                                          const AuthenticatedUser& user,
-                                          const Json::Value& body)
+void GenerateViewerUrlFromResource(OrthancPluginRestOutput* output,
+                                   const std::string& url,
+                                   const OrthancPluginHttpRequest* request,
+                                   const AuthenticatedUser& user,
+                                   const Json::Value& body)
 {
   assert(user.GetRole() == Role_Guest);
 
@@ -173,10 +173,10 @@ static void GenerateViewerUrlFromResource(OrthancPluginRestOutput* output,
 }
 
 
-static void GetUserProjects(OrthancPluginRestOutput* output,
-                            const std::string& url,
-                            const OrthancPluginHttpRequest* request,
-                            const AuthenticatedUser& user)
+void GetUserProjects(OrthancPluginRestOutput* output,
+                     const std::string& url,
+                     const OrthancPluginHttpRequest* request,
+                     const AuthenticatedUser& user)
 {
   if (user.GetRole() != Role_Administrator &&
       user.GetRole() != Role_Standard)
@@ -245,20 +245,20 @@ static const char* const GetHomepage(Role role)
 }
 
 
-static void RedirectRoot(OrthancPluginRestOutput* output,
-                         const std::string& url,
-                         const OrthancPluginHttpRequest* request,
-                         const AuthenticatedUser& user)
+void RedirectRoot(OrthancPluginRestOutput* output,
+                  const std::string& url,
+                  const OrthancPluginHttpRequest* request,
+                  const AuthenticatedUser& user)
 {
   const std::string homepage = GetHomepage(user.GetRole());
   OrthancPluginRedirect(OrthancPlugins::GetGlobalContext(), output, homepage.c_str());
 }
 
 
-static void ServeConfiguration(OrthancPluginRestOutput* output,
-                               const std::string& url,
-                               const OrthancPluginHttpRequest* request,
-                               const AuthenticatedUser& user)
+void ServeConfiguration(OrthancPluginRestOutput* output,
+                        const std::string& url,
+                        const OrthancPluginHttpRequest* request,
+                        const AuthenticatedUser& user)
 {
   Json::Value config;
   user.Serialize(config["user"]);
@@ -293,10 +293,10 @@ static void ServeConfiguration(OrthancPluginRestOutput* output,
 }
 
 
-static void ServeLogin(OrthancPluginRestOutput* output,
-                       const std::string& url,
-                       const OrthancPluginHttpRequest* request,
-                       const AuthenticatedUser& user)
+void ServeLogin(OrthancPluginRestOutput* output,
+                const std::string& url,
+                const OrthancPluginHttpRequest* request,
+                const AuthenticatedUser& user)
 {
   if (user.GetRole() == Role_Administrator ||
       user.GetRole() == Role_Standard)
@@ -329,10 +329,10 @@ static std::string GetJsonString(const Json::Value& json)
 }
 
 
-static void ChangeProjectParameter(OrthancPluginRestOutput* output,
-                                   const std::string& url,
-                                   const OrthancPluginHttpRequest* request,
-                                   const AuthenticatedUser& user)
+void ChangeProjectParameter(OrthancPluginRestOutput* output,
+                            const std::string& url,
+                            const OrthancPluginHttpRequest* request,
+                            const AuthenticatedUser& user)
 {
   const std::string key(request->groups[0]);
   const std::string property(request->groups[1]);
@@ -440,10 +440,10 @@ static Orthanc::Semaphore previewThrottler_(8);
 
 
 template <Orthanc::ResourceType level>
-static void GeneratePreview(OrthancPluginRestOutput* output,
-                            const std::string& url,
-                            const OrthancPluginHttpRequest* request,
-                            const AuthenticatedUser& user)
+void GeneratePreview(OrthancPluginRestOutput* output,
+                     const std::string& url,
+                     const OrthancPluginHttpRequest* request,
+                     const AuthenticatedUser& user)
 {
   const std::string resourceId(request->groups[0]);
 
@@ -624,11 +624,11 @@ static void GetResourceFromBody(Orthanc::ResourceType& level /* out */,
 }
 
 
-static void ChangeImageTitle(OrthancPluginRestOutput* output,
-                             const std::string& url,
-                             const OrthancPluginHttpRequest* request,
-                             const AuthenticatedUser& user,
-                             const Json::Value& body)
+void ChangeImageTitle(OrthancPluginRestOutput* output,
+                      const std::string& url,
+                      const OrthancPluginHttpRequest* request,
+                      const AuthenticatedUser& user,
+                      const Json::Value& body)
 {
   assert(user.GetRole() == Role_Administrator);
 
@@ -682,11 +682,11 @@ static void ChangeImageTitle(OrthancPluginRestOutput* output,
 }
 
 
-static void LinkResourceWithProject(OrthancPluginRestOutput* output,
-                                    const std::string& url,
-                                    const OrthancPluginHttpRequest* request,
-                                    const AuthenticatedUser& user,
-                                    const Json::Value& body)
+void LinkResourceWithProject(OrthancPluginRestOutput* output,
+                             const std::string& url,
+                             const OrthancPluginHttpRequest* request,
+                             const AuthenticatedUser& user,
+                             const Json::Value& body)
 {
   assert(user.GetRole() == Role_Administrator);
 
@@ -734,11 +734,11 @@ static void LinkResourceWithProject(OrthancPluginRestOutput* output,
 }
 
 
-static void ListImages(OrthancPluginRestOutput* output,
-                       const std::string& url,
-                       const OrthancPluginHttpRequest* request,
-                       const AuthenticatedUser& user,
-                       const Json::Value& body)
+void ListImages(OrthancPluginRestOutput* output,
+                const std::string& url,
+                const OrthancPluginHttpRequest* request,
+                const AuthenticatedUser& user,
+                const Json::Value& body)
 {
   assert(user.GetRole() == Role_Administrator);
 
@@ -763,11 +763,11 @@ static void ListImages(OrthancPluginRestOutput* output,
 }
 
 
-static void UnlinkResourceFromProject(OrthancPluginRestOutput* output,
-                                      const std::string& url,
-                                      const OrthancPluginHttpRequest* request,
-                                      const AuthenticatedUser& user,
-                                      const Json::Value& body)
+void UnlinkResourceFromProject(OrthancPluginRestOutput* output,
+                               const std::string& url,
+                               const OrthancPluginHttpRequest* request,
+                               const AuthenticatedUser& user,
+                               const Json::Value& body)
 {
   assert(user.GetRole() == Role_Administrator);
 
@@ -808,10 +808,10 @@ static void UnlinkResourceFromProject(OrthancPluginRestOutput* output,
 }
 
 
-static void HandleProjectsConfiguration(OrthancPluginRestOutput* output,
-                                        const std::string& url,
-                                        const OrthancPluginHttpRequest* request,
-                                        const AuthenticatedUser& user)
+void HandleProjectsConfiguration(OrthancPluginRestOutput* output,
+                                 const std::string& url,
+                                 const OrthancPluginHttpRequest* request,
+                                 const AuthenticatedUser& user)
 {
   assert(user.GetRole() == Role_Administrator);
 
@@ -900,10 +900,10 @@ static void HandleProjectsConfiguration(OrthancPluginRestOutput* output,
 }
 
 
-static void HandleSingleProject(OrthancPluginRestOutput* output,
-                                const std::string& url,
-                                const OrthancPluginHttpRequest* request,
-                                const AuthenticatedUser& user)
+void HandleSingleProject(OrthancPluginRestOutput* output,
+                         const std::string& url,
+                         const OrthancPluginHttpRequest* request,
+                         const AuthenticatedUser& user)
 {
   assert(user.GetRole() == Role_Administrator);
 
@@ -937,10 +937,10 @@ static void HandleSingleProject(OrthancPluginRestOutput* output,
 }
 
 
-static void SetLtiClientId(OrthancPluginRestOutput* output,
-                           const std::string& url,
-                           const OrthancPluginHttpRequest* request,
-                           const AuthenticatedUser& user)
+void SetLtiClientId(OrthancPluginRestOutput* output,
+                    const std::string& url,
+                    const OrthancPluginHttpRequest* request,
+                    const AuthenticatedUser& user)
 {
   assert(user.GetRole() == Role_Administrator);
 
