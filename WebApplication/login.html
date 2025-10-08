@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login to Orthanc for Education</title>
+    <link type="text/css" rel="stylesheet" href="../static/css/bootstrap.min.css">
+  </head>
+
+  <body>
+    <div id="app" class="container">
+      <div class="py-4 text-center">
+        <a href="https://www.uclouvain.be/facultes/epl" target="_blank">
+          <img src="../static/img/uclouvain.png" alt="" class="d-block mx-auto mb-3 img-fluid" style="max-height:72px">
+        </a> <br/>
+        <a href="https://orthanc.uclouvain.be/" target="_blank">
+          <img src="../static/img/orthanc.png" alt="" class="d-block mx-auto mb-3 img-fluid" style="max-height:72px">
+        </a> <br/>
+        <h2>Login to Orthanc for Education</h2>
+      </div>
+
+      <form @submit.prevent="login()" >
+
+        <div class="row justify-content-md-center mx-3 mb-3">
+          <label for="username" class="col-sm-2 col-form-label text-end">Username:</label>
+          <div class="col-sm-6">
+            <input type="text" class="form-control" name="username" v-model="username" required autocomplete="username">
+          </div>
+        </div>
+
+        <div class="row justify-content-md-center mx-3 mb-3">
+          <label for="password" class="col-sm-2 col-form-label text-end">Password:</label>
+          <div class="col-sm-6">
+            <input type="password" class="form-control" name="password" v-model="password" required autocomplete="current-password">
+          </div>
+        </div>
+
+        <div class="row justify-content-md-center mx-3 mb-3">
+          <div class="offset-sm-2 col-sm-6">
+            <input type="submit" value="Login" class="btn btn-primary">
+          </div>
+        </div>
+
+      </form>
+    </div>
+  </body>
+
+  <script src="../static/js/vue.min.js"></script>
+  <script src="../static/js/axios.min.js"></script>
+  <script src="../static/js/bootstrap.min.js"></script>
+  <script src="toolbox.js"></script>
+  <script src="login.js"></script>
+</html>

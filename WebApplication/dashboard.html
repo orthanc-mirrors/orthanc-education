@@ -1,0 +1,685 @@
+<!doctype html>
+
+<html lang="en">
+  <head>
+    <meta name="theme-color" content="#712cf9">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="">
+    <title>Orthanc for Education</title>
+
+    <link rel="stylesheet" href="../static/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../static/css/font-awesome.min.css">
+
+    <style>
+      .b-example-divider {
+          width: 100%;
+          height: 3rem;
+          background-color: rgba(0, 0, 0, .1);
+          border: solid rgba(0, 0, 0, .15);
+          border-width: 1px 0;
+          box-shadow: inset 0 .5em 1.5em rgba(0, 0, 0, .1), inset 0 .125em .5em rgba(0, 0, 0, .15);
+      }
+
+      .b-example-vr {
+          flex-shrink: 0;
+          width: 1.5rem;
+          height: 100vh;
+          min-height: 100%;
+      }
+
+      .list-indent {
+          padding-left: 1em !important;
+          margin-left: 1em;
+      }
+
+      .nav-link {
+          color: white;
+      }
+
+      .hidden {
+          display: none;
+      }
+    </style>
+  </head>
+
+  <body class="d-flex flex-column overflow-hidden vh-100">
+    <div class="container-fluid h-100 hidden" id="app">
+      <div class="row h-100">
+
+        <div class="col-2 bg-dark text-white">
+          <br/>
+          <a href="https://orthanc.uclouvain.be/" target="_blank" class="d-flex align-items-center mb-3 mb-md-0 me-md-auto text-white text-decoration-none">
+            <img src="../static/img/orthanc-negative.png" class="img-fluid">
+          </a>
+          <hr>
+          <ul class="nav nav-pills flex-column mb-auto">
+
+            <button class="nav-link active" id="pills-home-tab" data-bs-toggle="pill" data-bs-target="#pills-home" type="button" role="tab" aria-controls="pills-home" aria-selected="true">Home</button>
+            <button class="nav-link" id="pills-projects-tab" data-bs-toggle="pill" data-bs-target="#pills-projects" type="button" role="tab" aria-controls="pills-projects" aria-selected="false">Management of projects</button>
+            <button class="nav-link" id="pills-images-tab" data-bs-toggle="pill" data-bs-target="#pills-images" type="button" role="tab" aria-controls="pills-images" aria-selected="false">Management of images</button>
+            <button class="nav-link" id="pills-content-tab" data-bs-toggle="pill" data-bs-target="#pills-content" type="button" role="tab" aria-controls="pills-content" aria-selected="false">Content of projects</button>
+            <button class="nav-link" id="pills-upload-tab" data-bs-toggle="pill" data-bs-target="#pills-upload" type="button" role="tab" aria-controls="pills-upload" aria-selected="false">Upload whole-slide image</button>
+            <button class="nav-link" id="pills-status-tab" data-bs-toggle="pill" data-bs-target="#pills-status" type="button" role="tab" aria-controls="pills-status" aria-selected="false">Upload status</button>
+            <button class="nav-link" id="pills-settings-tab" data-bs-toggle="pill" data-bs-target="#pills-settings" type="button" role="tab" aria-controls="pills-settings" aria-selected="false">Settings</button>
+          </ul>
+
+          <hr>
+
+          <p>
+            User: <span class="badge text-bg-light">{{config.user === undefined ? "?" : config.user.id}}</span>
+          </p>
+
+          <p>
+            <div class="d-grid gap-2">
+              <button type="button" class="btn btn-success" @click="logout()">
+                <i class="fa fa-sign-out"></i> Logout
+              </button>
+            </div>
+          </p>
+        </div>
+
+        <div class="b-example-divider b-example-vr"></div>
+
+        <div class="col overflow-auto h-100 py-5">
+          <div class="container">
+            <div class="row py-3">
+              <p id="anchor-home"></p>
+              <p>
+                <a href="https://www.uclouvain.be/facultes/epl" class="navbar-brand" target="_blank">
+                  <img src="../static/img/uclouvain.png" class="img-fluid">
+                </a>
+              </p>
+              <p></p>
+            </div>
+
+
+            <div class="tab-content" id="v-pills-tabContent">
+              <div class="tab-pane show active" id="pills-home" role="tabpanel" aria-labelledby="pills-home-tab" tabindex="0">
+                <h1>Orthanc for Education</h1>
+                <p>
+                  This is a dashboard to manage <b>medical images for pedagogical usage</b>.
+                  It is also compatible with anatomopathology images.
+                </p>
+                <p>
+                  This development was partially funded by the
+                  <a href="https://www.lespecialiste.be/fr/actualites/e-health/laquo-un-hopital-virtuel-pour-ameliorer-l-rsquo-enseignement-en-informatique-medical-raquo.html" target="_blank">Virtual Hospital grant</a> at
+                  <a href="https://www.uclouvain.be/facultes/epl" target="_blank">Louvain School of Engineering (EPL)</a>.
+                  The platform is built on the top of <a href="https://orthanc.uclouvain.be/" target="_blank">Orthanc</a>, a free and open-source ecosystem
+                  for medical imaging that is developed at UCLouvain.
+                </p>
+                <p>
+                  <b>References:</b>
+                  <ul class="list-indent">
+                    <li><a href="https://orthanc.uclouvain.be/"
+                           target="_blank">Orthanc</a>, free and open-source ecosystem for medical imaging.</li>
+                    <li>Technical documentation about the <a href="https://orthanc.uclouvain.be/book/plugins/education.html"
+                           target="_blank">education plugin</a>.</li>
+                    <li>Technical documentation about the <a href="https://orthanc.uclouvain.be/book/plugins/wsi.html"
+                           target="_blank">whole-slide imaging plugin for Orthanc</a>.</li>
+                  </ul>
+                </p>
+
+                <div class="mb-5"></div>
+                <div class="d-grid gap-3 col-6 mx-auto">
+                  <button class="btn btn-primary" type="button"
+                          @click="openOrthancExplorer()">Open Orthanc Explorer</button>
+                  <button class="btn btn-primary" type="button" v-if="config.has_orthanc_explorer_2"
+                          @click="openOrthancExplorer2()">Open Orthanc Explorer 2</button>
+                </div>
+              </div>
+
+
+              <div class="tab-pane" id="pills-projects" role="tabpanel" aria-labelledby="pills-projects-tab" tabindex="0">
+                <h1>Management of the projects</h1>
+                <p>&nbsp;</p>
+
+                <div class="row justify-content-center">
+                  <div class="col-8">
+                    <div class="d-grid">
+                      <button class="btn btn-primary" type="button" @click="createProject()"><i class="fa fa-plus"></i>&nbsp;&nbsp;Create project</button>
+                    </div>
+                    <p></p>
+
+                    <div class="form-check form-switch mb-3">
+                      <input class="form-check-input" type="checkbox" role="switch" id="editProjectsSwitch" v-model="editProjectsSwitch">
+                      <label class="form-check-label" for="editProjectsSwitch">Edit configuration</label>
+                    </div>
+
+                    <div class="list-group">
+                      <a v-for="project in projects" class="list-group-item">
+                        <div class="d-flex w-100 justify-content-between">
+                          <h4 class="mb-2">
+                            {{project.name}}
+                            <button class="btn btn-sm btn-primary ms-2" v-if="editProjectsSwitch">
+                              <i class="fa fa-pencil" @click="modifyProjectName(project)"></i>
+                            </button>
+                            <span class="badge bg-secondary" v-if="project.policy === 'hidden'">hidden</span>
+                            <span class="badge bg-success" v-if="project.policy === 'active'">active</span>
+                            <span class="badge bg-danger" v-if="project.policy === 'public'">public</span>
+                          </h4>
+                          <small class="text-muted">
+                            Instructors: {{project.instructors.length}},
+                            learners: {{project.learners.length}}
+                          </small>
+                        </div>
+                        <p class="mb-2">{{project.description}}
+                          <button class="btn btn-sm btn-primary ms-2" v-if="editProjectsSwitch">
+                            <i class="fa fa-pencil" @click="modifyProjectDescription(project)"></i>
+                          </button>
+                        </p>
+                        <p>
+                          <button class="btn btn-large btn-primary" @click="openProjectParameters(project)"><i class="fa fa-cogs"></i> Parameters</button>
+                          <button class="btn btn-large btn-primary" @click="editProjectInstructors(project)"><i class="fa fa-university"></i> List of instructors</button>
+                          <button class="btn btn-large btn-primary" @click="editProjectLearners(project)"><i class="fa fa-graduation-cap"></i> List of learners</button>
+                          <button class="btn btn-large btn-warning" @click="deleteProject(project)" v-if="editProjectsSwitch"><i class="fa fa-trash"></i> Delete project</button>
+                        </p>
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+
+              <div class="tab-pane" id="pills-images" role="tabpanel" aria-labelledby="pills-images-tab" tabindex="0">
+                <h1>Management of the images</h1>
+                <p>&nbsp;</p>
+
+                <div class="row justify-content-center">
+                  <div class="col-8">
+
+                    <form action="javascript:void(0);">
+
+                      <div class="row mb-3">
+                        <label for="selectedProjectForImages" class="col-sm-4 col-form-label">Filter by project:</label>
+                        <div class="col-sm-8">
+                          <select class="form-select" id="selectedProjectForImages" v-model="projectIdForImages" >
+                            <option value="_no-project" selected>Images without a project</option>
+                            <option value="_all-projects" selected>All images</option>
+                            <option v-for="project in projects" :value="project.id">{{project.name}}</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div class="row mb-3">
+                        <label for="filterForImages" class="col-sm-4 col-form-label">Filter on description:</label>
+                        <div class="col-sm-8">
+                          <input type="text" class="form-control" v-model="filter" id="filterForImages">
+                        </div>
+                      </div>
+
+                      <div class="row mb-3">
+                        <label for="viewerForImages" class="col-sm-4 col-form-label">Viewer:</label>
+                        <div class="col-sm-8">
+                          <select class="form-select" id="viewerForImages" v-model="selectedViewer">
+                            <option v-for="viewer in config.viewers" :value="viewer.id">{{viewer.description}}</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div class="row mb-3">
+                        <div class="col-sm-8 offset-sm-4">
+                          <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" role="switch" id="editImagesSwitch" v-model="editImagesSwitch">
+                            <label class="form-check-label" for="editImagesSwitch">Edit configuration</label>
+                          </div>
+                        </div>
+                      </div>
+
+                    </form>
+
+                    <template v-for="resource in images" v-if="hasSubstring(resource.title, filter)">
+                      <div class="card">
+                        <div class="row g-0">
+                          <div class="fixed" style="width:152px">
+                            <img :src="resource.preview_url" class="img-fluid rounded-start" style="object-fit:contain;">
+                          </div>
+                          <div class="col">
+                            <div class="card-body">
+                              <h5 class="card-title">
+                                <span class="badge rounded-pill text-bg-secondary">{{resource.level}}</span>
+                                {{resource.title}}
+                                <button class="btn btn-sm btn-primary ms-2" v-if="editImagesSwitch">
+                                  <i class="fa fa-pencil" @click="modifyImageTitle(resource)"></i>
+                                </button>
+                              </h5>
+                              <p class="card-text">
+                                <button type="button" class="btn btn-success btn-sm"
+                                        @click="openOrthancExplorer(resource)">
+                                  <i class="fa fa-folder-open-o"></i> Open Orthanc Explorer
+                                </button>
+                                <button type="button" class="btn btn-success btn-sm"
+                                        @click="openViewer(selectedViewer, resource)">
+                                  <i class="fa fa-eye me-1"></i> Open DICOM viewer
+                                </button>
+                              </p>
+
+                              <p class="card-text">
+                                <small v-if="resource.projects.length == 0" class="text-body-secondary template-dicom-name">No associated project</small>
+                                <span v-for="project in resource.projects" class="badge rounded-pill bg-primary fs-6 me-1 mb-1">
+                                  {{projectsIndex[project].name}}
+                                  <button class="btn btn-xs border-0 p-0" v-if="editImagesSwitch">
+                                    <i class="fa fa-times" @click="unlinkResource(resource, projectsIndex[project].id)"></i>
+                                  </button>
+                                </span>
+                                <button class="btn btn-sm btn-success ms-2" @click="addProjectToImage(resource)"
+                                        v-if="editImagesSwitch"
+                                        data-bs-toggle="tooltip" data-bs-placement="top" title="Add the image to a project">
+                                  <i class="fa fa-plus"></i>
+                                </button>
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </template>
+
+                  </div>
+                </div>
+
+              </div>
+
+
+              <div class="tab-pane" id="pills-content" role="tabpanel" aria-labelledby="pills-content-tab" tabindex="0">
+                <h1>Content of the projects</h1>
+                <p>&nbsp;</p>
+
+                <div class="row justify-content-center">
+                  <div class="col-8">
+
+                    <form action="javascript:void(0);">
+
+                      <div class="row mb-3">
+                        <label for="selectedProjectForContent" class="col-sm-4 col-form-label">Select project:</label>
+                        <div class="col-sm-8">
+                          <select class="form-select" id="selectedProjectForContent" v-model="projectIdForContent" >
+                            <option v-if="Object.keys(projects).length === 0" value="" disabled selected>No project is available</option>
+                            <option v-for="project in projects" :value="project.id">{{project.name}}</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div class="row mb-3" v-if="isProjectForContentSelected">
+                        <label class="col-sm-4 col-form-label">Project description:</label>
+                        <div class="col-sm-8">
+                          <textarea class="form-control" v-model="projectForContent.description" disabled></textarea>
+                        </div>
+                      </div>
+
+                      <div class="row mb-3" v-if="isProjectForContentSelected">
+                        <label class="col-sm-4 col-form-label">Label for Orthanc Explorer:</label>
+                        <div class="col-sm-8">
+                          <input type="text" class="form-control" v-model="config.label_prefix + projectIdForContent" disabled>
+                        </div>
+                      </div>
+
+                      <div class="row mb-3" v-if="isProjectForContentSelected">
+                        <label class="col-sm-4 col-form-label">Access by instructors and learners:</label>
+                        <div class="col-sm-8">
+                          <button class="btn btn-primary" type="button" @click="copyListProjectToClipboard()">
+                            <i class="fa fa-clipboard clipboard-icon me-2" id="copyListProjectIcon"></i> Copy link
+                          </button>
+                          <button class="btn btn-success" type="button" @click="openListProject()">
+                            <i class="fa fa-eye me-2"></i> Open project
+                          </button>
+                        </div>
+                      </div>
+
+                      <div class="row mb-2" v-if="isProjectForContentSelected">
+                        <label for="linkImage" class="col-sm-4 col-form-label">Add an image to the project:</label>
+                        <div class="col-sm-8">
+                          <input type="text" class="form-control" v-model="linkImage"
+                                 placeholder="Paste the Orthanc or DICOM ID of a resource, or the URL of a viewer">
+                        </div>
+                      </div>
+
+                      <div class="row mb-3" v-if="isProjectForContentSelected">
+                        <div class="col-sm-8 offset-sm-4">
+                          <button class="btn btn-primary" type="button" @click="doLinkImage()">
+                            <i class="fa fa-link me-2"></i> Add image
+                          </button>
+                        </div>
+                      </div>
+
+                      <div class="row mb-3" v-if="isProjectForContentSelected">
+                        <label for="viewer" class="col-sm-4 col-form-label">Viewer to be used:</label>
+                        <div class="col-sm-8">
+                          <select class="form-select" id="viewer" v-model="selectedViewer">
+                            <option v-for="(item, index) in projectViewers"
+                                    :value="item.id">
+                              {{item.description}}
+                            </option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div class="row mb-3" v-if="isProjectForContentSelected">
+                        <label for="filterForContent" class="col-sm-4 col-form-label">Filter on description:</label>
+                        <div class="col-sm-8">
+                          <input type="text" class="form-control" v-model="filter" id="filterForContent">
+                        </div>
+                      </div>
+
+                    </form>
+
+                    <div class="row mx-2 mt-3 mb-3 table-responsive" v-if="isProjectForContentSelected">
+                      <table class="table align-middle">
+                        <thead>
+                          <tr>
+                            <th scope="col">Preview</th>
+                            <th scope="col">Level</th>
+                            <th scope="col">Description</th>
+                            <th scope="col"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr v-for="resource in projectForContent.resources" v-if="hasSubstring(resource.title, filter)">
+                            <td><img class="img-fluid" style="max-width:96px; max-height:96px;" :src="resource.preview_url"></td>
+                            <td>{{resource.level}}</td>
+                            <td>
+                              {{resource.title}}
+                              <button class="btn btn-sm btn-primary ms-2">
+                                <i class="fa fa-pencil" @click="modifyImageTitle(resource)"></i>
+                              </button>
+                            </td>
+                            <td style="white-space:nowrap;" class="text-end">
+                              <button type="button" class="btn btn-danger"
+                                      data-bs-toggle="tooltip" data-bs-placement="top" title="Remove the resource from the project"
+                                      @click="unlinkResource(resource, projectIdForContent)">
+                                <i class="fa fa-chain-broken"></i>
+                              </button>
+                              <button type="button" class="btn btn-primary"
+                                      data-bs-toggle="tooltip" data-bs-placement="top" title="Copy link to the DICOM viewer into the clipboard"
+                                      @click="copyViewerToClipboard(resource)">
+                                <i class="fa fa-clipboard clipboard-icon" :id="getClipboardIconId(resource)"></i>
+                              </button>
+                              <button type="button" class="btn btn-success"
+                                      data-bs-toggle="tooltip" data-bs-placement="top" title="Open the DICOM viewer"
+                                      @click="openViewer(selectedViewer, resource)">
+                                <i class="fa fa-eye"></i>
+                              </button>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+
+              <div class="tab-pane" id="pills-upload" role="tabpanel" aria-labelledby="pills-upload-tab" tabindex="0">
+                <h1>Upload whole-slide image</h1>
+                <p>&nbsp;</p>
+
+                <div class="row justify-content-center">
+                  <div class="col-8">
+                  </div>
+                </div>
+              </div>
+
+
+              <div class="tab-pane" id="pills-status" role="tabpanel" aria-labelledby="pills-status-tab" tabindex="0">
+                <h1>Status of the uploads</h1>
+                <p>&nbsp;</p>
+
+                <div class="row justify-content-center">
+                  <div class="col-8">
+                  </div>
+                </div>
+              </div>
+
+
+              <div class="tab-pane" id="pills-settings" role="tabpanel" aria-labelledby="pills-settings-tab" tabindex="0">
+                <h1>Settings</h1>
+                <p>&nbsp;</p>
+
+                <div class="row justify-content-center">
+                  <div class="col-10">
+
+                    <form action="javascript:void(0);">
+                      <div class="row mb-3">
+                        <label for="input-lti-client-id" class="col-sm-3 col-form-label">LTI Client ID</label>
+                        <div class="col-sm-9">
+                          <input type="text" class="form-control" id="input-lti-client-id" v-model="configLtiClientId">
+                        </div>
+                      </div>
+
+                      <div class="row mb-3">
+                        <label for="input-lti-client-id" class="col-sm-3 col-form-label">LTI platform URL</label>
+                        <div class="col-sm-9">
+                          <input type="text" class="form-control" id="input-lti-client-id" v-model="config.lti_platform_url" disabled>
+                        </div>
+                      </div>
+
+                      <div class="row mb-3">
+                        <label for="input-lti-client-id" class="col-sm-3 col-form-label">LTI platform keys URL</label>
+                        <div class="col-sm-9">
+                          <input type="text" class="form-control" id="input-lti-client-id" v-model="config.lti_platform_keys_url" disabled>
+                        </div>
+                      </div>
+
+                      <div class="row mb-3">
+                        <label for="input-lti-client-id" class="col-sm-3 col-form-label">LTI platform redirection URL</label>
+                        <div class="col-sm-9">
+                          <input type="text" class="form-control" id="input-lti-client-id" v-model="config.lti_platform_redirection_url" disabled>
+                        </div>
+                      </div>
+                    </form>
+
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="modalModifyText" class="modal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">{{modalModifyTextTitle}}</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <form action="javascript:void(0);">
+                <div class="mb-3">
+                  <label for="modalModifyTextValue" class="form-label">Value:</label>
+                  <input type="text" class="form-control" id="modalModifyTextValue" v-model="modalModifyTextValue"></input>
+                </div>
+              </form>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+              <button type="button" class="btn btn-primary" @click="modalModifyTextSave()">Save changes</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="modalCreateProject" class="modal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">Create project</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <form action="javascript:void(0);">
+                <div class="mb-3">
+                  <label for="modalCreateProjectName" class="form-label">Short name:</label>
+                  <input type="text" class="form-control" id="modalCreateProjectName" v-model="modalCreateProjectName"></input>
+                </div>
+                <div class="mb-3">
+                  <label for="modalCreateProjectDescription" class="form-label">Description:</label>
+                  <input type="text" class="form-control" id="modalCreateProjectDescription" v-model="modalCreateProjectDescription"></input>
+                </div>
+              </form>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+              <button type="button" class="btn btn-primary" @click="modalCreateProjectSave()">Create project</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="modalConfirm" class="modal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">{{modalConfirmTitle}}</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+              <button type="button" class="btn btn-primary" @click="modalConfirmSave()">Confirm</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="modalProjectParameters" class="modal" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">Parameters of the project</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <form action="javascript:void(0);">
+                <div class="row mb-3">
+                  <label for="projectPolicy" class="col-sm-4 col-form-label">Project access policy:</label>
+                  <div class="col-sm-8">
+                    <select class="form-select" id="projectPolicy" :disabled="!editProjectsSwitch"
+                            v-model="modalProjectParametersPolicy"
+                            @change="changeProjectPolicy">
+                      <option value="hidden">Hidden (only accessible to the instructors of the project)</option>
+                      <option value="active">Active (only accessible to registered learners)</option>
+                      <option value="public">Public (for MOOC with guest accounts)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <hr>
+
+                <div class="row mb-3">
+                  <label for="projectPrimaryViewer" class="col-sm-4 col-form-label">Primary viewer:</label>
+                  <div class="col-sm-8">
+                    <select class="form-select" id="projectPrimaryViewer" :disabled="!editProjectsSwitch"
+                            v-model="modalProjectParametersPrimaryViewer"
+                            @change="changeProjectPrimaryViewer">
+                      <option v-for="viewer in config.viewers" :value="viewer.id">{{viewer.description}}</option>
+                    </select>
+                  </div>
+                </div>
+
+                <fieldset class="row mb-3">
+                  <legend class="col-form-label col-sm-4 pt-0">Secondary viewers:</legend>
+                  <div class="col-sm-8">
+                    <div v-for="(viewer, index) in modalProjectParametersSecondaryViewers" class="form-check">
+                      <input class="form-check-input" type="checkbox" :id="'projectViewers' + index"
+                             :value="viewer.id"
+                             :disabled="!editProjectsSwitch"
+                             v-model="viewer.checked"
+                             @change="changeProjectSecondaryViewers">
+                      <label class="form-check-label" :for="'projectViewers' + index">
+                        {{viewer.description}}
+                      </label>
+                    </div>
+                  </div>
+                </fieldset>
+
+                <hr>
+
+                <div class="row mb-3">
+                  <div class="col-sm-8 offset-sm-4">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" id="projectParametersBindLti"
+                             v-model="modalProjectParametersBindLti" @change="changeProjectLtiContext" :disabled="!editProjectsSwitch">
+                      <label class="form-check-label" for="projectParametersBindLti">
+                        Bind project through LTI (e.g., for Moodle)
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="row mb-3">
+                  <label for="projectParametersLtiContext" class="col-sm-4 col-form-label">LTI context ID:</label>
+                  <div class="col-sm-8">
+                    <input type="text" class="form-control" id="projectParametersLtiContext"
+                           v-model="modalProjectParametersLtiContextId" @input="changeProjectLtiContext"
+                           :disabled="!editProjectsSwitch || !modalProjectParametersBindLti">
+                  </div>
+                </div>
+
+              </form>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Close</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="modalEditInstructors" class="modal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">Edit list of instructors</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <form action="javascript:void(0);">
+                <div class="mb-3">
+                  <label for="modalEditInstructorsArea" class="form-label">Instructors of the project:</label>
+                  <textarea class="form-control" id="modalEditInstructorsArea" rows="20"
+                            v-model="modalEditInstructorsArea" :disabled="!editProjectsSwitch"></textarea>
+                </div>
+              </form>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-primary" data-bs-dismiss="modal" v-if="!editProjectsSwitch">Close</button>
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" v-if="editProjectsSwitch">Cancel</button>
+              <button type="button" class="btn btn-primary" @click="modalEditInstructorsSave()" v-if="editProjectsSwitch">Save</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="modalEditLearners" class="modal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">Edit list of learners</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <form action="javascript:void(0);">
+                <div class="mb-3">
+                  <label for="modalEditLearnersArea" class="form-label">Learners of the project:</label>
+                  <textarea class="form-control" id="modalEditLearnersArea" rows="20"
+                            v-model="modalEditLearnersArea" :disabled="!editProjectsSwitch"></textarea>
+                </div>
+              </form>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-primary" data-bs-dismiss="modal" v-if="!editProjectsSwitch">Close</button>
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" v-if="editProjectsSwitch">Cancel</button>
+              <button type="button" class="btn btn-primary" @click="modalEditLearnersSave()" v-if="editProjectsSwitch">Save</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </body>
+
+  <script src="../static/js/axios.min.js"></script>
+  <script src="../static/js/vue.min.js"></script>
+  <script src="../static/js/bootstrap.min.js"></script>
+  <script src="toolbox.js"></script>
+  <script src="dashboard.js"></script>
+</html>

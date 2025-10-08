@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: 2024-2025 Sebastien Jodogne, EPL UCLouvain, Belgium
+# SPDX-License-Identifier: CC0-1.0
+
+syntax: glob
+*.orig
+*~
+ThirdPartyDownloads/
+i/
+s/
+w32/
