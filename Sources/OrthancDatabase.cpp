@@ -243,8 +243,7 @@ static bool LookupResource(std::string& resourceId,
 }
 
 
-static bool IsGrantedDicomWebStudy(const IPermissionContext& context,
-                                   const AuthenticatedUser& user,
+static bool IsGrantedDicomWebStudy(const OrthancDatabase::IProjectGranter& granter,
                                    const std::string& studyInstanceUid)
 {
   static const char* const KEY_SERIES = "Series";
@@ -255,7 +254,7 @@ static bool IsGrantedDicomWebStudy(const IPermissionContext& context,
   std::string resourceId;
   if (LookupResource(resourceId, tags, Orthanc::ResourceType_Study))
   {
-    if (OrthancDatabase::IsGrantedResource(context, user, Orthanc::ResourceType_Study, resourceId))
+    if (OrthancDatabase::IsGrantedResource(granter, Orthanc::ResourceType_Study, resourceId))
     {
       return true;
     }
@@ -279,7 +278,7 @@ static bool IsGrantedDicomWebStudy(const IPermissionContext& context,
           {
             throw Orthanc::OrthancException(Orthanc::ErrorCode_InternalError);
           }
-          else if (OrthancDatabase::IsGrantedResource(context, user, Orthanc::ResourceType_Series, study[KEY_SERIES][i].asString()))
+          else if (OrthancDatabase::IsGrantedResource(granter, Orthanc::ResourceType_Series, study[KEY_SERIES][i].asString()))
           {
             return true;
           }
@@ -300,8 +299,7 @@ static bool IsGrantedDicomWebStudy(const IPermissionContext& context,
 }
 
 
-static bool IsGrantedDicomWebSeries(const IPermissionContext& context,
-                                    const AuthenticatedUser& user,
+static bool IsGrantedDicomWebSeries(const OrthancDatabase::IProjectGranter& granter,
                                     const std::string& studyInstanceUid,
                                     const std::string& seriesInstanceUid)
 {
@@ -310,7 +308,7 @@ static bool IsGrantedDicomWebSeries(const IPermissionContext& context,
 
   std::string resourceId;
   if (LookupResource(resourceId, tags, Orthanc::ResourceType_Study) &&
-      OrthancDatabase::IsGrantedResource(context, user, Orthanc::ResourceType_Study, resourceId))
+      OrthancDatabase::IsGrantedResource(granter, Orthanc::ResourceType_Study, resourceId))
   {
     // The learner has access to the full study
     return true;
@@ -318,7 +316,7 @@ static bool IsGrantedDicomWebSeries(const IPermissionContext& context,
 
   tags[Orthanc::DICOM_TAG_SERIES_INSTANCE_UID] = seriesInstanceUid;
   return (LookupResource(resourceId, tags, Orthanc::ResourceType_Series) &&
-          OrthancDatabase::IsGrantedResource(context, user, Orthanc::ResourceType_Series, resourceId));
+          OrthancDatabase::IsGrantedResource(granter, Orthanc::ResourceType_Series, resourceId));
 }
 
 
@@ -558,8 +556,7 @@ namespace OrthancDatabase
   }
 
 
-  bool IsGrantedResource(const IPermissionContext& context,
-                         const AuthenticatedUser& user,
+  bool IsGrantedResource(const IProjectGranter& granter,
                          Orthanc::ResourceType level,
                          const std::string& resourceId)
   {
@@ -591,12 +588,11 @@ namespace OrthancDatabase
       }
     }
 
-    return context.IsGrantedProject(user, projectIds);
+    return granter.HasAccessToSomeProject(projectIds);
   }
 
 
-  bool IsGrantedDicomWeb(const IPermissionContext& context,
-                         const AuthenticatedUser& user,
+  bool IsGrantedDicomWeb(const OrthancDatabase::IProjectGranter& granter,
                          const std::vector<std::string>& path,
                          const std::map<std::string, std::string>& getArguments)
   {
@@ -610,7 +606,7 @@ namespace OrthancDatabase
         path[1] == "studies" &&
         path[3] == "series")
     {
-      return IsGrantedDicomWebStudy(context, user, path[2]);  // This is notably used by OHIF
+      return IsGrantedDicomWebStudy(granter, path[2]);  // This is notably used by OHIF
     }
 
     if (path.size() == 6 &&
@@ -619,7 +615,7 @@ namespace OrthancDatabase
         (path[5] == "metadata" ||
          path[5] == "rendered"))
     {
-      return IsGrantedDicomWebSeries(context, user, path[2], path[4]);
+      return IsGrantedDicomWebSeries(granter, path[2], path[4]);
     }
 
     if (path.size() == 7 &&
@@ -627,7 +623,7 @@ namespace OrthancDatabase
         path[3] == "series" &&
         path[5] == "instances")
     {
-      return IsGrantedDicomWebSeries(context, user, path[2], path[4]);
+      return IsGrantedDicomWebSeries(granter, path[2], path[4]);
     }
 
     if (path.size() == 8 &&
@@ -637,7 +633,7 @@ namespace OrthancDatabase
         (path[7] == "metadata" ||
          path[7] == "rendered"))
     {
-      return IsGrantedDicomWebSeries(context, user, path[2], path[4]);
+      return IsGrantedDicomWebSeries(granter, path[2], path[4]);
     }
 
     if (path.size() == 9 &&
@@ -646,7 +642,7 @@ namespace OrthancDatabase
         path[5] == "instances" &&
         path[7] == "frames")
     {
-      return IsGrantedDicomWebSeries(context, user, path[2], path[4]);  // This is notably used by OHIF
+      return IsGrantedDicomWebSeries(granter, path[2], path[4]);  // This is notably used by OHIF
     }
 
     if (path.size() == 10 &&
@@ -656,7 +652,7 @@ namespace OrthancDatabase
         path[7] == "frames" &&
         path[9] == "rendered")
     {
-      return IsGrantedDicomWebSeries(context, user, path[2], path[4]);
+      return IsGrantedDicomWebSeries(granter, path[2], path[4]);
     }
 
 
@@ -682,7 +678,7 @@ namespace OrthancDatabase
          path[1] == "series") &&
         studyInstanceUid != getArguments.end())
     {
-      return IsGrantedDicomWebStudy(context, user, studyInstanceUid->second);
+      return IsGrantedDicomWebStudy(granter, studyInstanceUid->second);
     }
 
     if (path.size() == 2 &&
@@ -690,7 +686,7 @@ namespace OrthancDatabase
         studyInstanceUid != getArguments.end() &&
         seriesInstanceUid != getArguments.end())
     {
-      return IsGrantedDicomWebSeries(context, user, studyInstanceUid->second, seriesInstanceUid->second);
+      return IsGrantedDicomWebSeries(granter, studyInstanceUid->second, seriesInstanceUid->second);
     }
 
     return false;

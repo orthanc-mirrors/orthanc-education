@@ -24,6 +24,7 @@
 
 #pragma once
 
+#include "OrthancDatabase.h"
 #include "Models/DocumentOrientedDatabase.h"
 #include "Models/Project.h"
 #include "Permissions/AuthenticatedUser.h"
@@ -31,23 +32,12 @@
 
 class ProjectPermissionContext : public IPermissionContext
 {
-private:
-  DocumentOrientedDatabase&  projects_;
-
 public:
-  ProjectPermissionContext(DocumentOrientedDatabase& projects) :
-    projects_(projects)
-  {
-  }
-
   static DocumentOrientedDatabase& GetProjects();  // This class is thread-safe
 
   static ProjectAccessMode GetProjectAccessMode(const AuthenticatedUser& user,
                                                 const std::string& projectId,
                                                 const Project& project);
-
-  virtual bool IsGrantedProject(const AuthenticatedUser& user,
-                                const std::set<std::string>& projectIds) const ORTHANC_OVERRIDE;
 
   virtual void LookupRolesOfUser(std::set<std::string>& projectsAsInstructor,
                                  std::set<std::string>& projectsAsLearner,
@@ -61,7 +51,21 @@ public:
   public:
     virtual IPermissionContext* CreateContext() const ORTHANC_OVERRIDE
     {
-      return new ProjectPermissionContext(GetProjects());
+      return new ProjectPermissionContext;
     }
+  };
+
+  class Granter : public OrthancDatabase::IProjectGranter
+  {
+  private:
+    const AuthenticatedUser&  user_;
+
+  public:
+    Granter(const AuthenticatedUser& user) :
+      user_(user)
+    {
+    }
+
+    virtual bool HasAccessToSomeProject(const std::set<std::string>& projectIds) const ORTHANC_OVERRIDE;
   };
 };

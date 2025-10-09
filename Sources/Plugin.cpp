@@ -111,7 +111,7 @@ static AuthorizationStatus DoAuthorization(const AuthenticatedUser& user,
    * transfer the authentification payload.
    **/
 
-  std::unique_ptr<IPermissionContext> context(EducationConfiguration::GetInstance().CreatePermissionContext());
+  ProjectPermissionContext::Granter granter(user);
 
   Orthanc::UriComponents path;
   Orthanc::Toolbox::SplitUriComponents(path, uri);
@@ -120,7 +120,7 @@ static AuthorizationStatus DoAuthorization(const AuthenticatedUser& user,
       path[0] == "wsi" &&
       path[1] == "pyramids")
   {
-    return (OrthancDatabase::IsGrantedResource(*context, user, Orthanc::ResourceType_Series, path[2]) ?
+    return (OrthancDatabase::IsGrantedResource(granter, Orthanc::ResourceType_Series, path[2]) ?
             AuthorizationStatus_GrantedWithoutPayload :
             AuthorizationStatus_Forbidden);
   }
@@ -129,7 +129,7 @@ static AuthorizationStatus DoAuthorization(const AuthenticatedUser& user,
       path[0] == "wsi" &&
       path[1] == "tiles")
   {
-    return (OrthancDatabase::IsGrantedResource(*context, user, Orthanc::ResourceType_Series, path[2]) ?
+    return (OrthancDatabase::IsGrantedResource(granter, Orthanc::ResourceType_Series, path[2]) ?
             AuthorizationStatus_GrantedWithoutPayload :
             AuthorizationStatus_Forbidden);
   }
@@ -137,7 +137,7 @@ static AuthorizationStatus DoAuthorization(const AuthenticatedUser& user,
   if (path.size() >= 2 &&
       path[0] == "dicom-web")
   {
-    return (OrthancDatabase::IsGrantedDicomWeb(*context, user, path, getArguments) ?
+    return (OrthancDatabase::IsGrantedDicomWeb(granter, path, getArguments) ?
             AuthorizationStatus_GrantedWithoutPayload :
             AuthorizationStatus_Forbidden);
   }
@@ -147,7 +147,7 @@ static AuthorizationStatus DoAuthorization(const AuthenticatedUser& user,
       path[1] == "frames-pyramids")
   {
     // This is for on-the-fly pyramids
-    return (OrthancDatabase::IsGrantedResource(*context, user, Orthanc::ResourceType_Instance, path[2]) ?
+    return (OrthancDatabase::IsGrantedResource(granter, Orthanc::ResourceType_Instance, path[2]) ?
             AuthorizationStatus_GrantedWithoutPayload :
             AuthorizationStatus_Forbidden);
   }
@@ -157,7 +157,7 @@ static AuthorizationStatus DoAuthorization(const AuthenticatedUser& user,
       path[1] == "frames-tiles")
   {
     // This is for on-the-fly pyramids
-    return (OrthancDatabase::IsGrantedResource(*context, user, Orthanc::ResourceType_Instance, path[2]) ?
+    return (OrthancDatabase::IsGrantedResource(granter, Orthanc::ResourceType_Instance, path[2]) ?
             AuthorizationStatus_GrantedWithoutPayload :
             AuthorizationStatus_Forbidden);
   }
@@ -167,7 +167,7 @@ static AuthorizationStatus DoAuthorization(const AuthenticatedUser& user,
       path[2] == "archive")
   {
     // For VolView
-    return (OrthancDatabase::IsGrantedResource(*context, user, Orthanc::ResourceType_Study, path[1]) ?
+    return (OrthancDatabase::IsGrantedResource(granter, Orthanc::ResourceType_Study, path[1]) ?
             AuthorizationStatus_GrantedWithoutPayload :
             AuthorizationStatus_Forbidden);
   }
@@ -177,7 +177,7 @@ static AuthorizationStatus DoAuthorization(const AuthenticatedUser& user,
       path[2] == "archive")
   {
     // For VolView
-    return (OrthancDatabase::IsGrantedResource(*context, user, Orthanc::ResourceType_Series, path[1]) ?
+    return (OrthancDatabase::IsGrantedResource(granter, Orthanc::ResourceType_Series, path[1]) ?
             AuthorizationStatus_GrantedWithoutPayload :
             AuthorizationStatus_Forbidden);
   }

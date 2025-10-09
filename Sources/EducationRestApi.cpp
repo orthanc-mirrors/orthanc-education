@@ -448,9 +448,9 @@ void GeneratePreview(OrthancPluginRestOutput* output,
   const std::string resourceId(request->groups[0]);
 
   {
-    std::unique_ptr<IPermissionContext> context(EducationConfiguration::GetInstance().CreatePermissionContext());
+    ProjectPermissionContext::Granter granter(user);
 
-    if (!OrthancDatabase::IsGrantedResource(*context, user, level, resourceId))
+    if (!OrthancDatabase::IsGrantedResource(granter, level, resourceId))
     {
       throw Orthanc::OrthancException(Orthanc::ErrorCode_ForbiddenAccess);
     }

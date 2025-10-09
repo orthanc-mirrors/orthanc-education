@@ -25,7 +25,6 @@
 #pragma once
 
 #include "Models/Project.h"
-#include "Permissions/IPermissionContext.h"
 
 #include <Enumerations.h>
 
@@ -38,6 +37,21 @@ static const char* const METADATA_PREVIEW = "9521";
 
 namespace OrthancDatabase
 {
+  class IProjectGranter : public boost::noncopyable
+  {
+  public:
+    virtual ~IProjectGranter()
+    {
+    }
+
+    /**
+     * This method must answer the question: Given the user that is
+     * currently authenticated, is this user allowed to access one of
+     * the listed projects?
+     **/
+    virtual bool HasAccessToSomeProject(const std::set<std::string>& projectIds) const = 0;
+  };
+
   std::string GenerateStudyViewerUrl(ViewerType viewer,
                                      const std::string& studyId,
                                      const std::string& studyInstanceUid);
@@ -66,13 +80,11 @@ namespace OrthancDatabase
                                   const std::string& projectId,
                                   const Project& project);
 
-  bool IsGrantedResource(const IPermissionContext& context,
-                         const AuthenticatedUser& user,
+  bool IsGrantedResource(const IProjectGranter& granter,
                          Orthanc::ResourceType level,
                          const std::string& resourceId);
 
-  bool IsGrantedDicomWeb(const IPermissionContext& context,
-                         const AuthenticatedUser& user,
+  bool IsGrantedDicomWeb(const IProjectGranter& granter,
                          const std::vector<std::string>& path,
                          const std::map<std::string, std::string>& getArguments);
 

@@ -44,14 +44,6 @@ public:
   {
   }
 
-  /**
-   * This method must answer the question: Given the user that is
-   * currently authenticated, is this user allowed to access one of
-   * the listed projects?
-   **/
-  virtual bool IsGrantedProject(const AuthenticatedUser& user,
-                                const std::set<std::string>& projectIds) const = 0;
-
   virtual void LookupRolesOfUser(std::set<std::string>& projectsAsInstructor,
                                  std::set<std::string>& projectsAsLearner,
                                  const std::string& userId) const = 0;

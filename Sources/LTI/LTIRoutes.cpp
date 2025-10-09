@@ -298,9 +298,9 @@ static void CheckUserPermission(const std::map<std::string, std::string>& args,
   const Orthanc::ResourceType level = Orthanc::StringToResourceType(levelString.c_str());
   const std::string resourceId = HttpToolbox::ReadMandatoryString(args, "resource-id");
 
-  std::unique_ptr<IPermissionContext> context(EducationConfiguration::GetInstance().CreatePermissionContext());
+  ProjectPermissionContext::Granter granter(user);
 
-  if (!OrthancDatabase::IsGrantedResource(*context, user, level, resourceId))
+  if (!OrthancDatabase::IsGrantedResource(granter, level, resourceId))
   {
     throw Orthanc::OrthancException(Orthanc::ErrorCode_ForbiddenAccess);
   }

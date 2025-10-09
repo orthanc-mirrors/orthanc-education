@@ -89,34 +89,11 @@ ProjectAccessMode ProjectPermissionContext::GetProjectAccessMode(const Authentic
 }
 
 
-bool ProjectPermissionContext::IsGrantedProject(const AuthenticatedUser& user,
-                                                const std::set<std::string>& projectIds) const
-{
-  DocumentOrientedDatabase::Reader reader(projects_);
-
-  for (std::set<std::string>::const_iterator it = projectIds.begin(); it != projectIds.end(); ++it)
-  {
-    const Project* project = reader.LookupDocument<Project>(*it);
-    if (project != NULL)
-    {
-      const ProjectAccessMode mode = GetProjectAccessMode(user, *it, *project);
-      if (mode == ProjectAccessMode_Writable ||
-          mode == ProjectAccessMode_ReadOnly)
-      {
-        return true;
-      }
-    }
-  }
-
-  return false;
-}
-
-
 void ProjectPermissionContext::LookupRolesOfUser(std::set<std::string>& projectsAsInstructor,
                                                  std::set<std::string>& projectsAsLearner,
                                                  const std::string& userId) const
 {
-  DocumentOrientedDatabase::Iterator iterator(projects_);
+  DocumentOrientedDatabase::Iterator iterator(GetProjects());
 
   while (iterator.Next())
   {
@@ -138,7 +115,7 @@ void ProjectPermissionContext::LookupRolesOfUser(std::set<std::string>& projects
 bool ProjectPermissionContext::LookupProjectFromLtiContext(std::string& projectId /* out */,
                                                            int64_t ltiContextId /* in */) const
 {
-  DocumentOrientedDatabase::Iterator iterator(projects_);
+  DocumentOrientedDatabase::Iterator iterator(GetProjects());
 
   // This loop could be optimized using an index, but there will
   // only be a few projects, so we keep things simple
@@ -150,6 +127,28 @@ bool ProjectPermissionContext::LookupProjectFromLtiContext(std::string& projectI
     {
       projectId = iterator.GetKey();
       return true;
+    }
+  }
+
+  return false;
+}
+
+
+bool ProjectPermissionContext::Granter::HasAccessToSomeProject(const std::set<std::string>& projectIds) const
+{
+  DocumentOrientedDatabase::Reader reader(GetProjects());
+
+  for (std::set<std::string>::const_iterator it = projectIds.begin(); it != projectIds.end(); ++it)
+  {
+    const Project* project = reader.LookupDocument<Project>(*it);
+    if (project != NULL)
+    {
+      const ProjectAccessMode mode = GetProjectAccessMode(user_, *it, *project);
+      if (mode == ProjectAccessMode_Writable ||
+          mode == ProjectAccessMode_ReadOnly)
+      {
+        return true;
+      }
     }
   }
 
