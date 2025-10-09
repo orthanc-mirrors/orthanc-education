@@ -34,9 +34,6 @@
 #include <vector>
 
 
-class AuthenticatedUser;
-
-
 class IPermissionContext : public boost::noncopyable
 {
 public:
@@ -50,20 +47,4 @@ public:
 
   virtual bool LookupProjectFromLtiContext(std::string& projectId /* out */,
                                            int64_t ltiContextId /* in */) const = 0;
-
-
-  class IFactory : public boost::noncopyable
-  {
-  public:
-    virtual ~IFactory()
-    {
-    }
-
-    /**
-     * This method must be thread-safe, as it can be invoked
-     * simultaneously by multiple threads. However, the returned
-     * "IPermissionContext" will be local to the calling thread.
-     **/
-    virtual IPermissionContext* CreateContext() const = 0;
-  };
 };

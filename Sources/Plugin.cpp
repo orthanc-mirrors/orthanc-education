@@ -582,7 +582,6 @@ extern "C"
     {
       OrthancPluginRegisterHttpAuthentication(context, HttpAuthentication);
       OrthancPluginRegisterOnChangeCallback(context, OnChangeCallback);
-      EducationConfiguration::GetInstance().SetPermissionContextFactory(new ProjectPermissionContext::Factory);
 
 
       /**

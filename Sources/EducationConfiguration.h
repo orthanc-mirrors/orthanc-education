@@ -53,8 +53,6 @@ private:
   std::string            ltiPlatformRedirectionUrlFromRegistration_;
   std::string            ltiClientId_;
 
-  std::unique_ptr<IPermissionContext::IFactory>  userPermissionContextFactory_;
-
   AuthenticationMode                  administratorsMode_;
   std::map<std::string, std::string>  administratorsCredentials_;
   std::set<std::string>               administratorsHeaders_;
@@ -131,10 +129,6 @@ public:
   void SetLtiClientId(const std::string& id);
 
   std::string GetLtiClientId();
-
-  void SetPermissionContextFactory(IPermissionContext::IFactory* factory /* takes ownership */);
-
-  IPermissionContext* CreatePermissionContext();
 
   void SetAdministratorsAuthenticationMode(AuthenticationMode mode);
 

@@ -25,6 +25,7 @@
 #include "EducationConfiguration.h"
 
 #include "HttpToolbox.h"
+#include "ProjectPermissionContext.h"
 
 #include <OrthancException.h>
 #include <SerializationToolbox.h>
@@ -391,35 +392,6 @@ std::string EducationConfiguration::GetLtiClientId()
 }
 
 
-void EducationConfiguration::SetPermissionContextFactory(IPermissionContext::IFactory* factory)
-{
-  if (factory == NULL)
-  {
-    throw Orthanc::OrthancException(Orthanc::ErrorCode_NullPointer);
-  }
-  else
-  {
-    boost::unique_lock<boost::shared_mutex> lock(mutex_);
-    userPermissionContextFactory_.reset(factory);
-  }
-}
-
-
-IPermissionContext* EducationConfiguration::CreatePermissionContext()
-{
-  boost::shared_lock<boost::shared_mutex> lock(mutex_);
-
-  if (userPermissionContextFactory_.get() == NULL)
-  {
-    throw Orthanc::OrthancException(Orthanc::ErrorCode_BadSequenceOfCalls);
-  }
-  else
-  {
-    return userPermissionContextFactory_->CreateContext();
-  }
-}
-
-
 void EducationConfiguration::SetAdministratorsAuthenticationMode(AuthenticationMode mode)
 {
   boost::unique_lock<boost::shared_mutex> lock(mutex_);
@@ -635,8 +607,8 @@ AuthenticatedUser* EducationConfiguration::DoLoginAuthentication(const std::stri
   if (standardUsersMode_ == AuthenticationMode_Login &&
       CheckLoginAuthentication(standardUsersCredentials_, username, password))
   {
-    std::unique_ptr<IPermissionContext> context(CreatePermissionContext());
-    return AuthenticatedUser::CreateStandardUser(*context, username);
+    ProjectPermissionContext context;
+    return AuthenticatedUser::CreateStandardUser(context, username);
   }
 
   return NULL;
@@ -680,8 +652,8 @@ AuthenticatedUser* EducationConfiguration::DoHttpHeaderAuthentication(uint32_t h
 
     if (IsHttpHeaderAllowed(standardUsersMode_, value, standardUsersHeaders_))
     {
-      std::unique_ptr<IPermissionContext> context(CreatePermissionContext());
-      return AuthenticatedUser::CreateStandardUser(*context, value);
+      ProjectPermissionContext context;
+      return AuthenticatedUser::CreateStandardUser(context, value);
     }
   }
 

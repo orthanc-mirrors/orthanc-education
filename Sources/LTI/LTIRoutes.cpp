@@ -194,17 +194,18 @@ void ServeLaunch(OrthancPluginRestOutput* output,
 
     const std::string url = HttpToolbox::ReadMandatoryString(custom, "orthanc_url");
 
+    std::unique_ptr<AuthenticatedUser> user;
+
     {
-      std::unique_ptr<IPermissionContext> context(EducationConfiguration::GetInstance().CreatePermissionContext());
-
-      std::unique_ptr<AuthenticatedUser> user(AuthenticatedUser::FromLti(*context, jwt.GetPayload()));
-
-      std::string token;
-      user->ForgeJWT(token, EducationConfiguration::GetInstance().GetLtiContext(),
-                     EducationConfiguration::GetInstance().GetMaxLoginAgeSeconds());
-
-      HttpToolbox::SetCookie(output, COOKIE_LTI, token, CookieSameSite_Lax);
+      ProjectPermissionContext context;
+      user.reset(AuthenticatedUser::FromLti(context, jwt.GetPayload()));
     }
+
+    std::string token;
+    user->ForgeJWT(token, EducationConfiguration::GetInstance().GetLtiContext(),
+                   EducationConfiguration::GetInstance().GetMaxLoginAgeSeconds());
+
+    HttpToolbox::SetCookie(output, COOKIE_LTI, token, CookieSameSite_Lax);
 
     // We manually reimplement "OrthancPluginRedirect()", to redirect the POST to a GET, and to set JWT cookie
     OrthancPluginSetHttpHeader(OrthancPlugins::GetGlobalContext(), output, "Location", url.c_str());
@@ -235,8 +236,12 @@ void ServeDeep(OrthancPluginRestOutput* output,
     JWT jwt(HttpToolbox::ReadMandatoryString(form, "id_token"));
     platformKeysRegistry_->VerifyJWT(jwt, EducationConfiguration::GetInstance().GetLtiPlatformKeysUrl(), 60 /* must be short-lived */);
 
-    std::unique_ptr<IPermissionContext> context(EducationConfiguration::GetInstance().CreatePermissionContext());
-    std::unique_ptr<AuthenticatedUser> user(AuthenticatedUser::FromLti(*context, jwt.GetPayload()));
+    std::unique_ptr<AuthenticatedUser> user;
+
+    {
+      ProjectPermissionContext context;
+      user.reset(AuthenticatedUser::FromLti(context, jwt.GetPayload()));
+    }
 
     std::string orthancEducationJwt;
     user->ForgeJWT(orthancEducationJwt, EducationConfiguration::GetInstance().GetLtiContext(),

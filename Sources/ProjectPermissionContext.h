@@ -46,15 +46,6 @@ public:
   virtual bool LookupProjectFromLtiContext(std::string& projectId /* out */,
                                            int64_t ltiContextId /* in */) const ORTHANC_OVERRIDE;
 
-  class Factory : public IFactory
-  {
-  public:
-    virtual IPermissionContext* CreateContext() const ORTHANC_OVERRIDE
-    {
-      return new ProjectPermissionContext;
-    }
-  };
-
   class Granter : public OrthancDatabase::IProjectGranter
   {
   private:
