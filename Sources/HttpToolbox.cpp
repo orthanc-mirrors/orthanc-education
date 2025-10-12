@@ -379,10 +379,15 @@ namespace HttpToolbox
                  CookieSameSite sameSite,
                  bool secure)
   {
-    const std::string s = EnumerationToString(sameSite);
+    std::string s = EnumerationToString(sameSite);
+
+    if (secure)
+    {
+      s += "; Secure";
+    }
 
     // NB: This is a session cookie, as it does not have "Expires" or "Max-Age"
-    std::string setCookie = cookie + "=" + value + "; HttpOnly; SameSite=" + s + "; Secure; Path=/";
+    std::string setCookie = cookie + "=" + value + "; HttpOnly; SameSite=" + s + "; Path=/";
 
     OrthancPluginSetHttpHeader(OrthancPlugins::GetGlobalContext(), output, "Set-Cookie", setCookie.c_str());
   }
@@ -393,11 +398,16 @@ namespace HttpToolbox
                    CookieSameSite sameSite,
                    bool secure)
   {
-    const std::string s = EnumerationToString(sameSite);
+    std::string s = EnumerationToString(sameSite);
+
+    if (secure)
+    {
+      s += "; Secure";
+    }
 
     // Deleting the cookie by setting its expiration date in the past
     // https://stackoverflow.com/a/53573622
-    std::string setCookie = cookie + "=; HttpOnly; SameSite=" + s + "; Secure; Path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+    std::string setCookie = cookie + "=; HttpOnly; SameSite=" + s + "; Path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
     OrthancPluginSetHttpHeader(OrthancPlugins::GetGlobalContext(), output, "Set-Cookie", setCookie.c_str());
   }
 
