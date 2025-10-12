@@ -44,12 +44,20 @@
 static const char* const COOKIE_USER_AUTH = "orthanc-education-user";
 
 
+template <bool AdministratorOnly>
 void ServeWebApplication(OrthancPluginRestOutput* output,
                          const std::string& url,
                          const OrthancPluginHttpRequest* request,
                          const AuthenticatedUser& user)
 {
-  assert(user.GetRole() == Role_Guest);
+  if (AdministratorOnly)
+  {
+    assert(user.GetRole() == Role_Administrator);
+  }
+  else
+  {
+    assert(user.GetRole() == Role_Guest);
+  }
 
   static const std::string PREFIX = "/education/app/";
   if (!boost::starts_with(url, PREFIX))
@@ -140,6 +148,8 @@ void GenerateListProjectUrl(OrthancPluginRestOutput* output,
   const std::string listUrl = "education/app/list-projects.html?open-project-id=" + s;
 
   Json::Value answer;
+
+  // NB: "relative_url" is relative to the root of Orthanc
   answer["relative_url"] = listUrl;
 
   std::string absolute;
@@ -171,6 +181,8 @@ void GenerateViewerUrlFromResource(OrthancPluginRestOutput* output,
   const std::string viewerUrl = OrthancDatabase::GenerateViewerUrl(viewer, resource);
 
   Json::Value answer;
+
+  // NB: "relative_url" is relative to the root of Orthanc
   answer["relative_url"] = viewerUrl;
 
   std::string absolute;
@@ -1180,12 +1192,10 @@ void RegisterEducationRestApiRoutes()
    * Safe routes, accessible to any user (even if not logged in)
    **/
 
-  RestApiRouter::RegisterPublicGetRoute<ServeWebApplication>("/education/app/dashboard.html");
-  RestApiRouter::RegisterPublicGetRoute<ServeWebApplication>("/education/app/dashboard.js");
-  RestApiRouter::RegisterPublicGetRoute<ServeWebApplication>("/education/app/list-projects.html");
-  RestApiRouter::RegisterPublicGetRoute<ServeWebApplication>("/education/app/list-projects.js");
-  RestApiRouter::RegisterPublicGetRoute<ServeWebApplication>("/education/app/login.js");
-  RestApiRouter::RegisterPublicGetRoute<ServeWebApplication>("/education/app/toolbox.js");
+  RestApiRouter::RegisterPublicGetRoute< ServeWebApplication<false> >("/education/app/list-projects.html");
+  RestApiRouter::RegisterPublicGetRoute< ServeWebApplication<false> >("/education/app/list-projects.js");
+  RestApiRouter::RegisterPublicGetRoute< ServeWebApplication<false> >("/education/app/login.js");
+  RestApiRouter::RegisterPublicGetRoute< ServeWebApplication<false> >("/education/app/toolbox.js");
 
   RestApiRouter::RegisterPublicPostRoute<DoLogin>("/education/do-login");
   RestApiRouter::RegisterPublicGetRoute<DoLogout>("/education/do-logout");
@@ -1213,6 +1223,9 @@ void RegisterEducationRestApiRoutes()
   /**
    * Routes that necessitate administrator credentials
    **/
+
+  RestApiRouter::RegisterAdministratorGetRoute< ServeWebApplication<true> >("/education/app/dashboard.html");
+  RestApiRouter::RegisterAdministratorGetRoute< ServeWebApplication<true> >("/education/app/dashboard.js");
 
   RestApiRouter::RegisterAdministratorPostRoute<ChangeImageTitle>("/education/api/change-title");
   RestApiRouter::RegisterAdministratorPostRoute<LinkResourceWithProject>("/education/api/link");

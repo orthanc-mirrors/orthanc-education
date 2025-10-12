@@ -16,6 +16,9 @@
         "instructor@uclouvain.be",
         "learner@uclouvain.be"
       ]
-    }
+    },
+    "PublicRoots" : [
+      "http://my-public"
+    ]
   }
 }

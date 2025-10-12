@@ -24,6 +24,7 @@
 
 
 import argparse
+import json
 import pprint
 import requests
 import sys
@@ -34,7 +35,7 @@ import unittest
 ## Parse the command-line arguments
 ##
 
-parser = argparse.ArgumentParser(description = 'Run the integration tests for the WSI Dicomizer.')
+parser = argparse.ArgumentParser(description = 'Run the integration tests for the Education plugin.')
 
 parser.add_argument('--server',
                     default = 'localhost',
@@ -62,7 +63,6 @@ Are you sure ["yes" to go on]?""" % args.server)
         exit(0)
 
 
-
 ##
 ## The tests
 ##
@@ -86,8 +86,15 @@ def LearnerHeaders():
 
 def GuestHeaders():
     return {
-        'Mail' : 'guest@uclouvain.be'
     }
+
+def AnyUserHeaders():
+    return [
+        AdministratorHeaders(),
+        InstructorHeaders(),
+        LearnerHeaders(),
+        GuestHeaders(),
+    ]
 
 
 class Orthanc(unittest.TestCase):
@@ -97,6 +104,7 @@ class Orthanc(unittest.TestCase):
 
         for project in requests.get(URL + '/education/api/projects', headers = AdministratorHeaders()).json():
             requests.delete(URL + '/education/api/projects/%s' % project['id'], headers = AdministratorHeaders())
+
 
     def test_config(self):
         config = requests.get(URL + '/education/api/config', headers = AdministratorHeaders()).json()
@@ -135,6 +143,144 @@ class Orthanc(unittest.TestCase):
         self.assertEqual(0, len(config['user']['instructor_of']))
         self.assertEqual(0, len(config['user']['learner_of']))
         self.assertFalse('lti_project_id' in config['user'])
+
+
+    def test_root_redirection(self):
+        path = requests.get(URL, headers = AdministratorHeaders(), allow_redirects=False).headers['Location']
+        self.assertEqual('education/app/dashboard.html', path)
+
+        path = requests.get(URL, headers = InstructorHeaders(), allow_redirects=False).headers['Location']
+        self.assertEqual('education/app/list-projects.html', path)
+
+        path = requests.get(URL, headers = LearnerHeaders(), allow_redirects=False).headers['Location']
+        self.assertEqual('education/app/list-projects.html', path)
+
+        path = requests.get(URL, headers = GuestHeaders(), allow_redirects=False).headers['Location']
+        self.assertEqual('education/app/login.html', path)
+
+
+    def test_logout(self):
+        for headers in AnyUserHeaders():
+            session = requests.session()
+            session.cookies.clear()
+            session.cookies.set('orthanc-education-user', 'a', domain = 'localhost.local')
+            session.cookies.set('orthanc-education-oidc', 'b', domain = 'localhost.local')
+            session.cookies.set('orthanc-education-lti', 'c', domain = 'localhost.local')
+            session.cookies.set('orthanc-education-nope', 'd', domain = 'localhost.local')
+
+            r = session.get(URL + '/education/do-logout', headers = headers)
+
+            # All the cookies have been cleared by "do-logout", except "orthanc-education-nope"
+            self.assertEqual(1, len(session.cookies.keys()))
+            self.assertEqual('orthanc-education-nope', session.cookies.keys() [0])
+
+
+    def test_get_routes_permissions(self):
+        # Public routes
+        for route in [
+            '/education/app/list-projects.html',
+            '/education/app/list-projects.js',
+            '/education/app/login.js',
+            '/education/app/toolbox.js',
+            '/education/do-logout',
+        ]:
+            self.assertEqual(200, requests.get(URL + route, headers = AdministratorHeaders()).status_code)
+            self.assertEqual(200, requests.get(URL + route, headers = InstructorHeaders()).status_code)
+            self.assertEqual(200, requests.get(URL + route, headers = LearnerHeaders()).status_code)
+            self.assertEqual(200, requests.get(URL + route, headers = GuestHeaders()).status_code)
+
+        # Administrator credentials
+        for route in [
+            '/education/app/dashboard.html',
+            '/education/app/dashboard.js',
+        ]:
+            self.assertEqual(200, requests.get(URL + route, headers = AdministratorHeaders()).status_code)
+            self.assertEqual(403, requests.get(URL + route, headers = InstructorHeaders()).status_code)
+            self.assertEqual(403, requests.get(URL + route, headers = LearnerHeaders()).status_code)
+            self.assertEqual(403, requests.get(URL + route, headers = GuestHeaders()).status_code)
+
+
+    def check_url(self, url, request):
+            self.assertEqual(url, request.json() ['relative_url'])
+            self.assertEqual('http://my-public/%s' % request.json() ['relative_url'], request.json() ['absolute_url'])
+
+
+    def test_list_project_url(self):
+        for headers in AnyUserHeaders():
+            r = requests.post(URL + '/education/api/list-project-url', json.dumps({
+                'project' : 'toto',
+            }), headers = headers)
+            self.check_url('education/app/list-projects.html?open-project-id=toto', r)
+
+
+    def test_list_project_url(self):
+        for headers in AnyUserHeaders():
+            body = {
+                'resource' : {
+                    'study-instance-uid' : 'tata',
+                    'resource-id' : 'toto',
+                    'level' : 'Study',
+                }
+            }
+
+            body['viewer'] = 'stone'
+            r = requests.post(URL + '/education/api/resource-viewer-url', json.dumps(body), headers = headers)
+            self.check_url('stone-webviewer/index.html?study=tata', r)
+
+            body['viewer'] = 'volview'
+            r = requests.post(URL + '/education/api/resource-viewer-url', json.dumps(body), headers = headers)
+            self.check_url('volview/index.html?names=[archive.zip]&urls=[../studies/toto/archive]', r)
+
+            body['viewer'] = 'ohif-basic'
+            r = requests.post(URL + '/education/api/resource-viewer-url', json.dumps(body), headers = headers)
+            self.check_url('ohif/viewer?StudyInstanceUIDs=tata', r)
+
+            body['viewer'] = 'ohif-volume'
+            r = requests.post(URL + '/education/api/resource-viewer-url', json.dumps(body), headers = headers)
+            self.check_url('ohif/viewer?hangingprotocolId=mprAnd3DVolumeViewport&StudyInstanceUIDs=tata', r)
+
+            body['viewer'] = 'ohif-tumor'
+            r = requests.post(URL + '/education/api/resource-viewer-url', json.dumps(body), headers = headers)
+            self.check_url('ohif/tmtv?StudyInstanceUIDs=tata', r)
+
+            body['viewer'] = 'ohif-segmentation'
+            r = requests.post(URL + '/education/api/resource-viewer-url', json.dumps(body), headers = headers)
+            self.check_url('ohif/segmentation?StudyInstanceUIDs=tata', r)
+
+            body = {
+                'resource' : {
+                    'study-instance-uid' : 'tata',
+                    'series-instance-uid' : 'tutu',
+                    'resource-id' : 'toto',
+                    'level' : 'Series',
+                }
+            }
+
+            body['viewer'] = 'stone'
+            r = requests.post(URL + '/education/api/resource-viewer-url', json.dumps(body), headers = headers)
+            self.check_url('stone-webviewer/index.html?study=tata&series=tutu', r)
+
+            body['viewer'] = 'wsi'
+            r = requests.post(URL + '/education/api/resource-viewer-url', json.dumps(body), headers = headers)
+            self.check_url('wsi/app/viewer.html?series=toto', r)
+
+            body['viewer'] = 'volview'
+            r = requests.post(URL + '/education/api/resource-viewer-url', json.dumps(body), headers = headers)
+            self.check_url('volview/index.html?names=[archive.zip]&urls=[../series/toto/archive]', r)
+
+            body = {
+                'resource' : {
+                    'study-instance-uid' : 'tata',
+                    'series-instance-uid' : 'tutu',
+                    'sop-instance-uid' : 'titi',
+                    'resource-id' : 'toto',
+                    'level' : 'Instance',
+                }
+            }
+
+            body['viewer'] = 'wsi'
+            r = requests.post(URL + '/education/api/resource-viewer-url', json.dumps(body), headers = headers)
+            self.check_url('wsi/app/viewer.html?instance=toto', r)
 
 
 try:
