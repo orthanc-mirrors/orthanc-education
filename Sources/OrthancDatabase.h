@@ -73,6 +73,8 @@ namespace OrthancDatabase
   std::string GenerateViewerUrl(ViewerType viewer,
                                 const Json::Value& resource);
 
+  void ListAllStudies(Json::Value& target);
+
   void FindResourcesInProject(Json::Value& target,
                               const std::string& projectId);
 

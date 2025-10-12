@@ -397,7 +397,7 @@ var app = new Vue({
     unlinkResource: function(resource, projectId) {
       var that = this;
 
-      this.modalConfirmTitle = 'Are you sure to remove this image?';
+      this.modalConfirmTitle = 'Are you sure to remove this image from the project?';
       this.modalConfirmSave = function() {
         this.modalConfirm.hide();
 

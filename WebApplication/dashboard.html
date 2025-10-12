@@ -195,7 +195,7 @@
                         <div class="col-sm-8">
                           <select class="form-select" id="selectedProjectForImages" v-model="projectIdForImages" >
                             <option value="_no-project" selected>Images without a project</option>
-                            <option value="_all-projects" selected>All images</option>
+                            <option value="_all-studies" selected>All studies</option>
                             <option v-for="project in projects" :value="project.id">{{project.name}}</option>
                           </select>
                         </div>
@@ -221,7 +221,7 @@
                         <div class="col-sm-8 offset-sm-4">
                           <div class="form-check form-switch">
                             <input class="form-check-input" type="checkbox" role="switch" id="editImagesSwitch" v-model="editImagesSwitch">
-                            <label class="form-check-label" for="editImagesSwitch">Edit configuration</label>
+                            <label class="form-check-label" for="editImagesSwitch">Modify images</label>
                           </div>
                         </div>
                       </div>

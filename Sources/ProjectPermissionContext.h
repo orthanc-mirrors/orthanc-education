@@ -24,9 +24,9 @@
 
 #pragma once
 
-#include "OrthancDatabase.h"
 #include "Models/DocumentOrientedDatabase.h"
 #include "Models/Project.h"
+#include "OrthancDatabase.h"
 #include "Permissions/AuthenticatedUser.h"
 #include "Permissions/IPermissionContext.h"
 

@@ -136,6 +136,14 @@ bool ProjectPermissionContext::LookupProjectFromLtiContext(std::string& projectI
 
 bool ProjectPermissionContext::Granter::HasAccessToSomeProject(const std::set<std::string>& projectIds) const
 {
+  if (user_.GetRole() == Role_Administrator)
+  {
+    // This path is notably required to generate the preview of a
+    // study or series that has not yet been assigned to a project by
+    // the administrator.
+    return true;
+  }
+
   DocumentOrientedDatabase::Reader reader(GetProjects());
 
   for (std::set<std::string>::const_iterator it = projectIds.begin(); it != projectIds.end(); ++it)

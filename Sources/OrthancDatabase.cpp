@@ -60,13 +60,24 @@ static std::string FormatResourcePath(Orthanc::ResourceType level,
 }
 
 
+enum ProjectsConstraint
+{
+  ProjectsConstraint_None,
+  ProjectsConstraint_Any
+};
+
+
 static void ExecuteFind(Json::Value& resources,
                         Orthanc::ResourceType level,
-                        const std::string& projectId,
+                        ProjectsConstraint constraint,
+                        const std::set<std::string>& projects,
                         const std::list<std::string>& tags)
 {
   Json::Value labels = Json::arrayValue;
-  labels.append(LABEL_PREFIX + projectId);
+  for (std::set<std::string>::const_iterator it = projects.begin(); it != projects.end(); ++it)
+  {
+    labels.append(LABEL_PREFIX + *it);
+  }
 
   Json::Value responseContent = Json::arrayValue;
   responseContent.append("Labels");
@@ -98,12 +109,28 @@ static void ExecuteFind(Json::Value& resources,
 
   Json::Value request;
   request["Level"] = Orthanc::EnumerationToString(level);
-  request["Labels"] = labels;
-  request["LabelsConstraint"] = "Any";
   request["Query"] = Json::objectValue;
   request["Expand"] = true;
   request["ResponseContent"] = responseContent;
   request["RequestedTags"] = requestedTags;
+
+  if (constraint != ProjectsConstraint_None)
+  {
+    request["Labels"] = labels;
+  }
+
+  switch (constraint)
+  {
+  case ProjectsConstraint_None:
+    break;
+
+  case ProjectsConstraint_Any:
+    request["LabelsConstraint"] = "Any";
+    break;
+
+  default:
+    throw Orthanc::OrthancException(Orthanc::ErrorCode_ParameterOutOfRange);
+  }
 
   Json::Value response;
   if (!OrthancPlugins::RestApiPost(response, "/tools/find", request, false) ||
@@ -193,6 +220,17 @@ static void ExecuteFind(Json::Value& resources,
 
     resources.append(resource);
   }
+}
+
+
+static void ExecuteFindForProject(Json::Value& resources,
+                                 Orthanc::ResourceType level,
+                                 const std::string& projectId,
+                                 const std::list<std::string>& tags)
+{
+  std::set<std::string> projects;
+  projects.insert(projectId);
+  ExecuteFind(resources, level, ProjectsConstraint_Any, projects, tags);
 }
 
 
@@ -501,6 +539,20 @@ namespace OrthancDatabase
   }
 
 
+  void ListAllStudies(Json::Value& target)
+  {
+    target.clear();
+
+    std::set<std::string> projects;
+    std::list<std::string> requestedTags;
+
+    requestedTags.clear();
+    requestedTags.push_back("PatientName");
+    requestedTags.push_back("StudyDescription");
+    ExecuteFind(target, Orthanc::ResourceType_Study, ProjectsConstraint_None, projects, requestedTags);
+  }
+
+
   void FindResourcesInProject(Json::Value& target,
                               const std::string& projectId)
   {
@@ -511,20 +563,20 @@ namespace OrthancDatabase
     requestedTags.clear();
     requestedTags.push_back("PatientName");
     requestedTags.push_back("StudyDescription");
-    ExecuteFind(target, Orthanc::ResourceType_Study, projectId, requestedTags);
+    ExecuteFindForProject(target, Orthanc::ResourceType_Study, projectId, requestedTags);
 
     requestedTags.clear();
     requestedTags.push_back("PatientName");
     requestedTags.push_back("StudyDescription");
     requestedTags.push_back("SeriesDescription");
-    ExecuteFind(target, Orthanc::ResourceType_Series, projectId, requestedTags);
+    ExecuteFindForProject(target, Orthanc::ResourceType_Series, projectId, requestedTags);
 
     requestedTags.clear();
     requestedTags.push_back("PatientName");
     requestedTags.push_back("StudyDescription");
     requestedTags.push_back("SeriesDescription");
     requestedTags.push_back("InstanceNumber");
-    ExecuteFind(target, Orthanc::ResourceType_Instance, projectId, requestedTags);
+    ExecuteFindForProject(target, Orthanc::ResourceType_Instance, projectId, requestedTags);
   }
 
 

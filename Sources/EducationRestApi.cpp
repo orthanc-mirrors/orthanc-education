@@ -746,9 +746,9 @@ void ListImages(OrthancPluginRestOutput* output,
 
   Json::Value answer;
 
-  if (project == "_all-projects")
+  if (project == "_all-studies")
   {
-    throw Orthanc::OrthancException(Orthanc::ErrorCode_NotImplemented);
+    OrthancDatabase::ListAllStudies(answer);
   }
   else if (project == "_no-project")
   {
