@@ -108,7 +108,7 @@ public:
     content_.secondaryViewers_.erase(viewer);
   }
 
-  void SetSecondaryViewers(const std::set<ViewerType> viewers)
+  void SetSecondaryViewers(const std::set<ViewerType>& viewers)
   {
     content_.secondaryViewers_ = viewers;
   }

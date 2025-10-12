@@ -71,12 +71,12 @@ enum ProjectsConstraint
 static void ExecuteFind(Json::Value& resources,
                         Orthanc::ResourceType level,
                         ProjectsConstraint constraint,
-                        const std::set<std::string>& projects)
+                        const std::set<std::string>& projectIds)
 {
-  Json::Value labels = Json::arrayValue;
-  for (std::set<std::string>::const_iterator it = projects.begin(); it != projects.end(); ++it)
+  Json::Value requestLabels = Json::arrayValue;
+  for (std::set<std::string>::const_iterator it = projectIds.begin(); it != projectIds.end(); ++it)
   {
-    labels.append(LABEL_PREFIX + *it);
+    requestLabels.append(LABEL_PREFIX + *it);
   }
 
   Json::Value responseContent = Json::arrayValue;
@@ -129,12 +129,12 @@ static void ExecuteFind(Json::Value& resources,
     break;
 
   case ProjectsConstraint_Any:
-    request["Labels"] = labels;
+    request["Labels"] = requestLabels;
     request["LabelsConstraint"] = "Any";
     break;
 
   case ProjectsConstraint_None:
-    request["Labels"] = labels;
+    request["Labels"] = requestLabels;
     request["LabelsConstraint"] = "None";
 
     if (level == Orthanc::ResourceType_Series)
@@ -171,13 +171,15 @@ static void ExecuteFind(Json::Value& resources,
 
     std::string title;
 
-    std::map<std::string, std::string>::const_iterator found = metadata.find(METADATA_INFO);
-    if (found != metadata.end())
     {
-      Json::Value info;
-      if (Orthanc::Toolbox::ReadJson(info, found->second))
+      std::map<std::string, std::string>::const_iterator found = metadata.find(METADATA_INFO);
+      if (found != metadata.end())
       {
-        title = Orthanc::SerializationToolbox::ReadString(info, "title", "");
+        Json::Value info;
+        if (Orthanc::Toolbox::ReadJson(info, found->second))
+        {
+          title = Orthanc::SerializationToolbox::ReadString(info, "title", "");
+        }
       }
     }
 
@@ -198,12 +200,12 @@ static void ExecuteFind(Json::Value& resources,
       }
     }
 
-    std::list<std::string> labels;
-    Orthanc::SerializationToolbox::ReadListOfStrings(labels, response[i], "Labels");
+    std::list<std::string> responseLabels;
+    Orthanc::SerializationToolbox::ReadListOfStrings(responseLabels, response[i], "Labels");
 
     Json::Value projects = Json::arrayValue;
 
-    for (std::list<std::string>::const_iterator it = labels.begin(); it != labels.end(); ++it)
+    for (std::list<std::string>::const_iterator it = responseLabels.begin(); it != responseLabels.end(); ++it)
     {
       if (boost::starts_with(*it, LABEL_PREFIX))
       {

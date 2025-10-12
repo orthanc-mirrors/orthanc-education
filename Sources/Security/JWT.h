@@ -35,7 +35,7 @@ private:
   std::string  signature_;
 
 public:
-  JWT(const std::string& jwt);
+  explicit JWT(const std::string& jwt);
 
   const std::string& GetKeyId() const
   {

@@ -685,7 +685,6 @@ extern "C"
 
         EducationConfiguration::GetInstance().SetLtiPlatformUrl(platformUrl);
 
-        std::string s;
         if (configLti.LookupStringValue(s, "PlatformKeysUrl"))
         {
           EducationConfiguration::GetInstance().SetLtiPlatformKeysUrlFromFile(s);

@@ -145,16 +145,11 @@ void ServeOidc(OrthancPluginRestOutput* output,
     arguments["scope"] = "openid";
     arguments["state"] = state;
 
-    std::string url;
-    HttpToolbox::FormatRedirectionUrl(url, EducationConfiguration::GetInstance().GetLtiPlatformRedirectionUrl(), arguments);
-
-    /*OrthancPluginSetHttpHeader(OrthancPlugins::GetGlobalContext(), output, "Access-Control-Allow-Credentials", "true");
-      OrthancPluginSetHttpHeader(OrthancPlugins::GetGlobalContext(), output, "Access-Control-Allow-Origin", platformUrl_.c_str());
-      OrthancPluginSetHttpHeader(OrthancPlugins::GetGlobalContext(), output, "Vary", "Origin, Cookie");
-      OrthancPluginSetHttpHeader(OrthancPlugins::GetGlobalContext(), output, "Content-Type", "text/html; charset=utf-8");*/
+    std::string redirection;
+    HttpToolbox::FormatRedirectionUrl(redirection, EducationConfiguration::GetInstance().GetLtiPlatformRedirectionUrl(), arguments);
 
     // We manually reimplement "OrthancPluginRedirect()", otherwise "Set-Cookie" has no effect
-    OrthancPluginSetHttpHeader(OrthancPlugins::GetGlobalContext(), output, "Location", url.c_str());
+    OrthancPluginSetHttpHeader(OrthancPlugins::GetGlobalContext(), output, "Location", redirection.c_str());
     OrthancPluginSendHttpStatusCode(OrthancPlugins::GetGlobalContext(), output, 302);
   }
 }
@@ -192,7 +187,7 @@ void ServeLaunch(OrthancPluginRestOutput* output,
     std::map<std::string, std::string> custom;
     Orthanc::SerializationToolbox::ReadMapOfStrings(custom, jwt.GetPayload(), "https://purl.imsglobal.org/spec/lti/claim/custom");
 
-    const std::string url = HttpToolbox::ReadMandatoryString(custom, "orthanc_url");
+    const std::string redirection = HttpToolbox::ReadMandatoryString(custom, "orthanc_url");
 
     std::unique_ptr<AuthenticatedUser> user;
 
@@ -208,7 +203,7 @@ void ServeLaunch(OrthancPluginRestOutput* output,
     HttpToolbox::SetCookie(output, COOKIE_LTI, token, CookieSameSite_Lax);
 
     // We manually reimplement "OrthancPluginRedirect()", to redirect the POST to a GET, and to set JWT cookie
-    OrthancPluginSetHttpHeader(OrthancPlugins::GetGlobalContext(), output, "Location", url.c_str());
+    OrthancPluginSetHttpHeader(OrthancPlugins::GetGlobalContext(), output, "Location", redirection.c_str());
     OrthancPluginSendHttpStatusCode(OrthancPlugins::GetGlobalContext(), output, 303);  // 303 means "See Other"
   }
 }
@@ -330,7 +325,7 @@ void CreateDeepLink(OrthancPluginRestOutput* output,
     link["type"] = "ltiResourceLink";
     link["url"] = Orthanc::Toolbox::JoinUri(EducationConfiguration::GetInstance().GetLtiOrthancUrl(), "education/lti/launch");
 
-    std::string url;
+    std::string linkUrl;
     const std::string type = HttpToolbox::ReadMandatoryString(args, "link-type");
 
     if (type == "viewer")
@@ -340,7 +335,7 @@ void CreateDeepLink(OrthancPluginRestOutput* output,
       const ViewerType viewer = ParseViewerType(HttpToolbox::ReadMandatoryString(args, "viewer"));
 
       link["title"] = HttpToolbox::ReadMandatoryString(args, "title");
-      url = Orthanc::Toolbox::JoinUri("../..", OrthancDatabase::GenerateViewerUrl(viewer, args));
+      linkUrl = Orthanc::Toolbox::JoinUri("../..", OrthancDatabase::GenerateViewerUrl(viewer, args));
     }
     else if (type == "project")
     {
@@ -348,7 +343,7 @@ void CreateDeepLink(OrthancPluginRestOutput* output,
           user.IsInstructorOfProject(user.GetLtiProjectId()))
       {
         link["title"] = "DICOM resources available in this course";
-        url = "../app/list-projects.html?open-project-id=" + user.GetLtiProjectId();
+        linkUrl = "../app/list-projects.html?open-project-id=" + user.GetLtiProjectId();
       }
       else
       {
@@ -361,7 +356,7 @@ void CreateDeepLink(OrthancPluginRestOutput* output,
     }
 
     // WARNING: LTI does not like dashes "-" in the keys, so we use underscores "_"
-    link["custom"]["orthanc_url"] = url;
+    link["custom"]["orthanc_url"] = linkUrl;
 
     Json::Value content = Json::arrayValue;
     content.append(link);
@@ -416,10 +411,10 @@ void RedirectToViewer(OrthancPluginRestOutput* output,
     }
 
     const ViewerType viewer = ParseViewerType(HttpToolbox::ReadMandatoryString(args, "viewer"));
-    const std::string url = Orthanc::Toolbox::JoinUri("../..", OrthancDatabase::GenerateViewerUrl(viewer, args));
+    const std::string viewerUrl = Orthanc::Toolbox::JoinUri("../..", OrthancDatabase::GenerateViewerUrl(viewer, args));
 
     // We manually reimplement "OrthancPluginRedirect()", otherwise "Set-Cookie" has no effect
-    OrthancPluginSetHttpHeader(OrthancPlugins::GetGlobalContext(), output, "Location", url.c_str());
+    OrthancPluginSetHttpHeader(OrthancPlugins::GetGlobalContext(), output, "Location", viewerUrl.c_str());
     OrthancPluginSendHttpStatusCode(OrthancPlugins::GetGlobalContext(), output, 302);
   }
 }

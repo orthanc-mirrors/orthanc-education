@@ -52,7 +52,7 @@ public:
     const AuthenticatedUser&  user_;
 
   public:
-    Granter(const AuthenticatedUser& user) :
+    explicit Granter(const AuthenticatedUser& user) :
       user_(user)
     {
     }

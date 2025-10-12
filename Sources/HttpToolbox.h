@@ -92,7 +92,7 @@ namespace HttpToolbox
                               const char *const *values);
 
   bool LookupCDictionary(std::string& target,
-                         const std::string key,
+                         const std::string& key,
                          bool toLowerCase,
                          uint32_t count,
                          const char *const *keys,

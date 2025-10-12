@@ -86,7 +86,7 @@ public:
     LTIContext&                context_;
 
   public:
-    Lock(LTIContext& context) :
+    explicit Lock(LTIContext& context) :
       lock_(context.mutex_),
       context_(context)
     {

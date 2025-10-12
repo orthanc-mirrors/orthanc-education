@@ -8,6 +8,7 @@ Files:
   CITATION.cff
   NEWS
   README
+  TODO
   Resources/Images/*.png
 Copyright: 2024-2025 Sebastien Jodogne, EPL UCLouvain (Belgium)
 License: CC0-1.0

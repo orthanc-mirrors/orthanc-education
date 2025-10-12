@@ -617,7 +617,7 @@ AuthenticatedUser* EducationConfiguration::DoLoginAuthentication(const std::stri
 
 static bool IsHttpHeaderAllowed(AuthenticationMode mode,
                                 const std::string& value,
-                                const std::set<std::string> restrictedValues)
+                                const std::set<std::string>& restrictedValues)
 {
   switch (mode)
   {

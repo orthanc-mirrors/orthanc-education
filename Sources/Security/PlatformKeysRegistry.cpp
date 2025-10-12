@@ -93,7 +93,8 @@ void PlatformKeysRegistry::Update(const std::string& url,
 
 
 PlatformKeysRegistry::PlatformKeysRegistry() :
-  isLoaded_(false)
+  isLoaded_(false),
+  lastUpdate_(0)
 {
 }
 

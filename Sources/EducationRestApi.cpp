@@ -305,8 +305,8 @@ void ServeLogin(OrthancPluginRestOutput* output,
       user.GetRole() == Role_Standard)
   {
     // Special case: If the user is already logged in, redirect to the homepage
-    std::string url = Orthanc::Toolbox::JoinUri("../..", GetHomepage(user.GetRole()));
-    OrthancPluginRedirect(OrthancPlugins::GetGlobalContext(), output, url.c_str());
+    const std::string redirection = Orthanc::Toolbox::JoinUri("../..", GetHomepage(user.GetRole()));
+    OrthancPluginRedirect(OrthancPlugins::GetGlobalContext(), output, redirection.c_str());
   }
   else
   {
@@ -448,7 +448,7 @@ private:
   std::unique_ptr<Orthanc::ImageAccessor>  modified_;
 
 public:
-  Thumbnail(const OrthancPlugins::OrthancImage& source) :
+  explicit Thumbnail(const OrthancPlugins::OrthancImage& source) :
     source_(source)
   {
   }
@@ -548,8 +548,8 @@ public:
 
 
 
-static unsigned int THUMBNAIL_WIDTH = 128;
-static unsigned int THUMBNAIL_HEIGHT = 128;
+static const unsigned int THUMBNAIL_WIDTH = 128;
+static const unsigned int THUMBNAIL_HEIGHT = 128;
 
 
 /**

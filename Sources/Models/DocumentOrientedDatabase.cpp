@@ -237,7 +237,7 @@ bool DocumentOrientedDatabase::Iterator::Next()
   }
   else
   {
-    current_++;
+    ++current_;
     return (current_ != end_);
   }
 }

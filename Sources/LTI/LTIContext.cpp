@@ -64,7 +64,7 @@ bool LTIContext::LookupSessionUnsafe(std::string& sessionId,
                                      const std::list<HttpToolbox::Cookie>& cookies)
 {
   // The same cookie might be present multiple times, hence the loop
-  for (std::list<HttpToolbox::Cookie>::const_iterator cookie = cookies.begin(); cookie != cookies.end(); cookie++)
+  for (std::list<HttpToolbox::Cookie>::const_iterator cookie = cookies.begin(); cookie != cookies.end(); ++cookie)
   {
     if (cookie->GetKey() == COOKIE_OIDC_SESSION)
     {
@@ -96,13 +96,15 @@ void LTIContext::OpenSessionUnsafe(std::string& sessionId,
                                    std::string& state,
                                    std::string& nonce)
 {
-  std::unique_ptr<Session> session(new Session);
+  {
+    std::unique_ptr<Session> session(new Session);
 
-  sessionId = Orthanc::Toolbox::GenerateUuid();
-  state = session->GetState();
-  nonce = session->GetNonce();
+    sessionId = Orthanc::Toolbox::GenerateUuid();
+    state = session->GetState();
+    nonce = session->GetNonce();
 
-  sessions_.Add(sessionId, session.release());
+    sessions_.Add(sessionId, session.release());
+  }
 
   if (sessions_.GetSize() > 1000 /* maximum number of active sessions */)
   {

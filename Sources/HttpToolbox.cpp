@@ -169,7 +169,7 @@ namespace HttpToolbox
 
 
   bool LookupCDictionary(std::string& target,
-                         const std::string key,
+                         const std::string& key,
                          bool toLowerCase,
                          uint32_t count,
                          const char *const *keys,
@@ -450,7 +450,6 @@ namespace HttpToolbox
       slash--;
     }
 
-    std::string normalized;
     if (slash == std::string::npos)
     {
       return url;
