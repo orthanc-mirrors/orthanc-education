@@ -130,7 +130,11 @@ void ServeOidc(OrthancPluginRestOutput* output,
     }
 
     std::string state, nonce;
-    EducationConfiguration::GetInstance().GetLtiContext().EnterSession(output, state, nonce, cookieHeader);
+
+    {
+      const bool secureCookies = EducationConfiguration::GetInstance().IsSecureCookies();
+      EducationConfiguration::GetInstance().GetLtiContext().EnterSession(output, state, nonce, cookieHeader, secureCookies);
+    }
 
     std::map<std::string, std::string> arguments;
     arguments["client_id"] = EducationConfiguration::GetInstance().GetLtiClientId();
@@ -200,7 +204,10 @@ void ServeLaunch(OrthancPluginRestOutput* output,
     user->ForgeJWT(token, EducationConfiguration::GetInstance().GetLtiContext(),
                    EducationConfiguration::GetInstance().GetMaxLoginAgeSeconds());
 
-    HttpToolbox::SetCookie(output, COOKIE_LTI, token, CookieSameSite_Lax);
+    {
+      const bool secureCookies = EducationConfiguration::GetInstance().IsSecureCookies();
+      HttpToolbox::SetCookie(output, COOKIE_LTI, token, CookieSameSite_Lax, secureCookies);
+    }
 
     // We manually reimplement "OrthancPluginRedirect()", to redirect the POST to a GET, and to set JWT cookie
     OrthancPluginSetHttpHeader(OrthancPlugins::GetGlobalContext(), output, "Location", redirection.c_str());
@@ -403,7 +410,10 @@ void RedirectToViewer(OrthancPluginRestOutput* output,
       CheckUserPermission(args, *check);
 
       // Setting the cookie is needed for "RedirectToViewer()" to work, as long as no deep link has been created
-      HttpToolbox::SetCookie(output, COOKIE_LTI, bearer->second, CookieSameSite_Lax);
+      {
+        const bool secureCookies = EducationConfiguration::GetInstance().IsSecureCookies();
+        HttpToolbox::SetCookie(output, COOKIE_LTI, bearer->second, CookieSameSite_Lax, secureCookies);
+      }
     }
     else
     {
@@ -589,7 +599,8 @@ void RegisterLTIRoutes()
 
 void ClearLTICookie(OrthancPluginRestOutput* output)
 {
-  HttpToolbox::ClearCookie(output, COOKIE_LTI, CookieSameSite_Lax);
+  const bool secureCookies = EducationConfiguration::GetInstance().IsSecureCookies();
+  HttpToolbox::ClearCookie(output, COOKIE_LTI, CookieSameSite_Lax, secureCookies);
 }
 
 

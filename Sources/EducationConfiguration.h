@@ -43,6 +43,7 @@ private:
   std::list<std::string> publicRoots_;
   unsigned int           maxLoginAge_;  // In seconds
   bool                   listProjectsAsLearner_;
+  bool                   secureCookies_;
 
   bool                   ltiEnabled_;
   std::string            ltiOrthancUrl_;
@@ -99,6 +100,10 @@ public:
   void SetListProjectsAsLearner(bool show);
 
   bool IsListProjectsAsLearner();
+
+  void SetSecureCookies(bool secure);
+
+  bool IsSecureCookies();
 
   void SetLtiEnabled(bool enabled);
 

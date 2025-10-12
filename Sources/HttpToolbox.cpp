@@ -376,7 +376,8 @@ namespace HttpToolbox
   void SetCookie(OrthancPluginRestOutput* output,
                  const std::string& cookie,
                  const std::string& value,
-                 CookieSameSite sameSite)
+                 CookieSameSite sameSite,
+                 bool secure)
   {
     const std::string s = EnumerationToString(sameSite);
 
@@ -389,7 +390,8 @@ namespace HttpToolbox
 
   void ClearCookie(OrthancPluginRestOutput* output,
                    const std::string& cookie,
-                   CookieSameSite sameSite)
+                   CookieSameSite sameSite,
+                   bool secure)
   {
     const std::string s = EnumerationToString(sameSite);
 

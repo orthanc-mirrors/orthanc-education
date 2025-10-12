@@ -45,6 +45,7 @@ static const char* const FIELD_LTI_PRIVATE_KEY_ID = "lti-private-key-id";
 EducationConfiguration::EducationConfiguration() :
   maxLoginAge_(60 * 60 /* by default, 1 hour */),
   listProjectsAsLearner_(true),
+  secureCookies_(true),
   ltiEnabled_(false),
   administratorsMode_(AuthenticationMode_None),
   standardUsersMode_(AuthenticationMode_None),
@@ -213,6 +214,20 @@ bool EducationConfiguration::IsListProjectsAsLearner()
 {
   boost::shared_lock<boost::shared_mutex> lock(mutex_);
   return listProjectsAsLearner_;
+}
+
+
+void EducationConfiguration::SetSecureCookies(bool secure)
+{
+  boost::unique_lock<boost::shared_mutex> lock(mutex_);
+  secureCookies_ = secure;
+}
+
+
+bool EducationConfiguration::IsSecureCookies()
+{
+  boost::shared_lock<boost::shared_mutex> lock(mutex_);
+  return secureCookies_;
 }
 
 

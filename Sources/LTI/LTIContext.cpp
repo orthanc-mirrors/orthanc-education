@@ -191,7 +191,8 @@ bool LTIContext::VerifyJWT(const JWT& jwt)
 void LTIContext::EnterSession(OrthancPluginRestOutput* output,
                               std::string& state,
                               std::string& nonce,
-                              const std::string& cookieHeader)
+                              const std::string& cookieHeader,
+                              bool secureCookie)
 {
   std::list<HttpToolbox::Cookie> cookies;
   HttpToolbox::ParseCookies(cookies, cookieHeader);
@@ -204,7 +205,7 @@ void LTIContext::EnterSession(OrthancPluginRestOutput* output,
     if (!LookupSessionUnsafe(sessionId, state, nonce, cookies))
     {
       OpenSessionUnsafe(sessionId, state, nonce);
-      HttpToolbox::SetCookie(output, COOKIE_OIDC_SESSION, sessionId, CookieSameSite_None);
+      HttpToolbox::SetCookie(output, COOKIE_OIDC_SESSION, sessionId, CookieSameSite_None, secureCookie);
       LOG(INFO) << "Opening new LTI session: " << sessionId;
     }
     else
@@ -215,9 +216,10 @@ void LTIContext::EnterSession(OrthancPluginRestOutput* output,
 }
 
 
-void LTIContext::CloseSession(OrthancPluginRestOutput* output)
+void LTIContext::CloseSession(OrthancPluginRestOutput* output,
+                              bool secureCookie)
 {
-  HttpToolbox::ClearCookie(output, COOKIE_OIDC_SESSION, CookieSameSite_None);
+  HttpToolbox::ClearCookie(output, COOKIE_OIDC_SESSION, CookieSameSite_None, secureCookie);
 }
 
 

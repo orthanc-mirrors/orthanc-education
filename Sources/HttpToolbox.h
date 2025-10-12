@@ -127,11 +127,13 @@ namespace HttpToolbox
   void SetCookie(OrthancPluginRestOutput* output,
                  const std::string& cookie,
                  const std::string& value,
-                 CookieSameSite sameSite);
+                 CookieSameSite sameSite,
+                 bool secure);
 
   void ClearCookie(OrthancPluginRestOutput* output,
                    const std::string& cookie,
-                   CookieSameSite sameSite);
+                   CookieSameSite sameSite,
+                   bool secure);
 
   void AnswerJson(OrthancPluginRestOutput* output,
                   const Json::Value& value);

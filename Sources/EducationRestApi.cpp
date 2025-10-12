@@ -91,8 +91,11 @@ void DoLogin(OrthancPluginRestOutput* output,
     user->ForgeJWT(token, EducationConfiguration::GetInstance().GetLtiContext(),
                    EducationConfiguration::GetInstance().GetMaxLoginAgeSeconds());
 
-    EducationConfiguration::GetInstance().GetLtiContext().CloseSession(output);
-    HttpToolbox::SetCookie(output, COOKIE_USER_AUTH, token, CookieSameSite_Lax);
+    {
+      const bool secureCookies = EducationConfiguration::GetInstance().IsSecureCookies();
+      EducationConfiguration::GetInstance().GetLtiContext().CloseSession(output, secureCookies);
+      HttpToolbox::SetCookie(output, COOKIE_USER_AUTH, token, CookieSameSite_Lax, secureCookies);
+    }
 
     Json::Value answer;
     HttpToolbox::AnswerJson(output, answer);
@@ -107,8 +110,12 @@ void DoLogout(OrthancPluginRestOutput* output,
 {
   assert(user.GetRole() == Role_Guest);
 
-  EducationConfiguration::GetInstance().GetLtiContext().CloseSession(output);
-  HttpToolbox::ClearCookie(output, COOKIE_USER_AUTH, CookieSameSite_Lax);
+  {
+    const bool secureCookies = EducationConfiguration::GetInstance().IsSecureCookies();
+    EducationConfiguration::GetInstance().GetLtiContext().CloseSession(output, secureCookies);
+    HttpToolbox::ClearCookie(output, COOKIE_USER_AUTH, CookieSameSite_Lax, secureCookies);
+  }
+
   ClearLTICookie(output);
 
   // We manually reimplement "OrthancPluginRedirect()", otherwise "Set-Cookie" has no effect

@@ -72,9 +72,11 @@ public:
   void EnterSession(OrthancPluginRestOutput* output,
                     std::string& state,
                     std::string& nonce,
-                    const std::string& cookieHeader);
+                    const std::string& cookieHeader,
+                    bool secureCookie);
 
-  void CloseSession(OrthancPluginRestOutput* output);
+  void CloseSession(OrthancPluginRestOutput* output,
+                    bool secureCookie);
 
   bool CheckSession(const std::string& cookieHeader,
                     const std::string& state);

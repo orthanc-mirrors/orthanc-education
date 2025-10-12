@@ -638,6 +638,7 @@ extern "C"
       }
 
       EducationConfiguration::GetInstance().SetListProjectsAsLearner(configEducation.GetBooleanValue("ListProjectsAsLearner", true));
+      EducationConfiguration::GetInstance().SetSecureCookies(configEducation.GetBooleanValue("SecureCookies", true));
 
       ConfigureAuthentication(Role_Administrator, configEducation, "Administrators");
       ConfigureAuthentication(Role_Standard, configEducation, "StandardUsers");
