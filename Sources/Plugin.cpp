@@ -426,6 +426,20 @@ static OrthancPluginErrorCode OnChangeCallback(OrthancPluginChangeType changeTyp
         EducationConfiguration::GetInstance().SetPluginWholeSlideImaging(plugins.find("wsi") != plugins.end());
         EducationConfiguration::GetInstance().SetPluginOhif(plugins.find("ohif") != plugins.end());
 
+        if (EducationConfiguration::GetInstance().HasPluginOrthancExplorer2())
+        {
+          OrthancPlugins::OrthancConfiguration config;
+          OrthancPlugins::OrthancConfiguration configOE2(false);
+          config.GetSection(configOE2, "OrthancExplorer2");
+
+          if (configOE2.GetBooleanValue("Enable", true) &&
+              configOE2.GetBooleanValue("IsDefaultOrthancUI", true))
+          {
+            throw Orthanc::OrthancException(Orthanc::ErrorCode_IncompatibleConfigurations,
+                                            "The education plugin necessitates OrthancExplorer2.IsDefaultOrthancUI to be set to \"false\"");
+          }
+        }
+
         std::set<ViewerType> viewers;
         EducationConfiguration::GetInstance().ListAvailableViewers(viewers);
 
@@ -580,10 +594,6 @@ extern "C"
 
     try
     {
-      OrthancPluginRegisterHttpAuthentication(context, HttpAuthentication);
-      OrthancPluginRegisterOnChangeCallback(context, OnChangeCallback);
-
-
       /**
        * Read generic configuration
        **/
@@ -598,20 +608,11 @@ extern "C"
         LOG(INFO) << "The education plugin is disabled";
         return 0;
       }
-      else
-      {
-        LOG(WARNING) << "The education plugin is enabled, which overwrites the built-in Orthanc authentication";
-      }
 
-      OrthancPlugins::OrthancConfiguration configOE2(false);
-      config.GetSection(configOE2, "OrthancExplorer2");
+      LOG(WARNING) << "The education plugin is enabled, which overwrites the built-in Orthanc authentication";
+      OrthancPluginRegisterHttpAuthentication(context, HttpAuthentication);
+      OrthancPluginRegisterOnChangeCallback(context, OnChangeCallback);
 
-      if (configOE2.GetBooleanValue("Enable", true) &&
-          configOE2.GetBooleanValue("IsDefaultOrthancUI", true))
-      {
-        throw Orthanc::OrthancException(Orthanc::ErrorCode_IncompatibleConfigurations,
-                                        "The education plugin necessitates OrthancExplorer2.IsDefaultOrthancUI to be set to \"false\"");
-      }
 
       std::string s;
       if (configEducation.LookupStringValue(s, "AuthenticationHttpHeader"))
