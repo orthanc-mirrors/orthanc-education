@@ -180,7 +180,7 @@ var app = new Vue({
       axios
         .get('../api/projects')
         .then(function(response) {
-          that.projects = response.data;
+          that.projects = sortObjectsByField(response.data, 'name');
 
           that.projectsIndex = {};
           that.projects.forEach((project) => {
@@ -200,7 +200,7 @@ var app = new Vue({
           project: this.projectIdForImages
         })
         .then(function(response) {
-          that.images = response.data;
+          that.images = sortObjectsByField(response.data, 'title');
         })
         .catch(function() {
           that.images = [];
@@ -238,7 +238,7 @@ var app = new Vue({
           name: that.modalCreateProjectName,
           description: that.modalCreateProjectDescription
         }).then(function() {
-          that.reloadProjectsParameters()
+          that.reloadProjectsParameters();
         });
       }
       this.modalCreateProject.show();

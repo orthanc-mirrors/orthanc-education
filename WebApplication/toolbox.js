@@ -100,3 +100,22 @@ function doCopyListProjectToClipboard(projectId, callback) {
       alert('Cannot generate the link to the list of projects');
     });
 }
+
+
+function sortObjectsByField(arr, field) {
+  return arr.sort(function(a, b) {
+    if (!(field in a) ||
+        !(field in b)) {
+      console.error('Missing field "' + field + '"');
+      return 0;
+    } else {
+      if (a[field] > b[field]) {
+        return 1;
+      } else if (a[field] < b[field]) {
+        return -1;
+      } else {
+        return 0;
+      }
+    }
+  });
+}

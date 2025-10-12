@@ -79,7 +79,7 @@ var app = new Vue({
     projectResources() {
       var project = this.projects[this.selectedProjectId];
       if (project !== undefined) {
-        return project.resources;
+        return sortObjectsByField(project.resources, 'title');
       } else {
         return '';
       }

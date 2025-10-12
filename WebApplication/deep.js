@@ -79,7 +79,7 @@ var app = new Vue({
         .then(function(res) {
           that.project_name = res.data.name;
           that.project_description = res.data.description;
-          that.resources = res.data.resources;
+          that.resources = sortObjectsByField(res.data.resources, 'title');
           that.selected_viewer = res.data.primary_viewer;
           that.viewers = res.data.secondary_viewers;
 
