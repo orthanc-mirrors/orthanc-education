@@ -75,9 +75,11 @@ namespace OrthancDatabase
 
   void ListAllStudies(Json::Value& target);
 
-  void ListUnusedResources(Json::Value& target,
-                           Orthanc::ResourceType level,
-                           const std::set<std::string>& allProjectIds);
+  void ListUnusedStudies(Json::Value& target,
+                         const std::set<std::string>& allProjectIds);
+
+  void ListUnusedSeries(Json::Value& target,
+                        const std::set<std::string>& allProjectIds);
 
   void FindResourcesInProject(Json::Value& target,
                               const std::string& projectId);

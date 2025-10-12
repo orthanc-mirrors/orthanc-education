@@ -755,7 +755,19 @@ static void CallListUnusedResources(Json::Value& answer,
     }
   }
 
-  OrthancDatabase::ListUnusedResources(answer, level, allProjectIds);
+  switch (level)
+  {
+    case Orthanc::ResourceType_Study:
+      OrthancDatabase::ListUnusedStudies(answer, allProjectIds);
+      break;
+
+    case Orthanc::ResourceType_Series:
+      OrthancDatabase::ListUnusedSeries(answer, allProjectIds);
+      break;
+
+    default:
+      throw Orthanc::OrthancException(Orthanc::ErrorCode_NotImplemented);
+  }
 }
 
 

@@ -205,6 +205,7 @@ var app = new Vue({
         })
         .then(function(response) {
           that.images = sortObjectsByField(response.data, 'title');
+          that.filter = '';
         })
         .catch(function() {
           that.images = [];

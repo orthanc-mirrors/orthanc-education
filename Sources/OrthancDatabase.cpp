@@ -122,11 +122,6 @@ static void ExecuteFind(Json::Value& resources,
   }
 
   Json::Value request;
-  request["Level"] = Orthanc::EnumerationToString(level);
-  request["Query"] = Json::objectValue;
-  request["Expand"] = true;
-  request["ResponseContent"] = responseContent;
-  request["RequestedTags"] = requestedTags;
 
   switch (constraint)
   {
@@ -141,11 +136,23 @@ static void ExecuteFind(Json::Value& resources,
   case ProjectsConstraint_None:
     request["Labels"] = labels;
     request["LabelsConstraint"] = "None";
+
+    if (level == Orthanc::ResourceType_Series)
+    {
+      responseContent.append("Parent");
+    }
+
     break;
 
   default:
     throw Orthanc::OrthancException(Orthanc::ErrorCode_ParameterOutOfRange);
   }
+
+  request["Level"] = Orthanc::EnumerationToString(level);
+  request["Query"] = Json::objectValue;
+  request["Expand"] = true;
+  request["ResponseContent"] = responseContent;
+  request["RequestedTags"] = requestedTags;
 
   Json::Value response;
   if (!OrthancPlugins::RestApiPost(response, "/tools/find", request, false) ||
@@ -561,12 +568,52 @@ namespace OrthancDatabase
   }
 
 
-  void ListUnusedResources(Json::Value& target,
-                           Orthanc::ResourceType level,
-                           const std::set<std::string>& allProjectIds)
+  void ListUnusedStudies(Json::Value& target,
+                         const std::set<std::string>& allProjectIds)
   {
     target.clear();
-    ExecuteFind(target, level, ProjectsConstraint_None, allProjectIds);
+    ExecuteFind(target, Orthanc::ResourceType_Study, ProjectsConstraint_None, allProjectIds);
+  }
+
+
+  void ListUnusedSeries(Json::Value& target,
+                        const std::set<std::string>& allProjectIds)
+  {
+    /**
+     * An "unused DICOM series" is defined as a DICOM series that is
+     * not associated with any project, and whose parent study is also
+     * not associated with any project.
+     **/
+
+    // First, get the Study Instance UIDs of all the unused studies
+    std::set<std::string> unusedStudies;
+
+    {
+      Json::Value studies;
+      ExecuteFind(studies, Orthanc::ResourceType_Study, ProjectsConstraint_None, allProjectIds);
+
+      for (Json::Value::ArrayIndex i = 0; i < studies.size(); i++)
+      {
+        assert(Orthanc::SerializationToolbox::ReadString(studies[i], "level") == "Study");
+        unusedStudies.insert(Orthanc::SerializationToolbox::ReadString(studies[i], "study-instance-uid"));
+      }
+    }
+
+    // Secondly, download all the series not associated with any project
+    Json::Value series;
+    ExecuteFind(series, Orthanc::ResourceType_Series, ProjectsConstraint_None, allProjectIds);
+
+    // Thirdly, merge the two lists by computing their intersection
+    target.clear();
+    for (Json::Value::ArrayIndex i = 0; i < series.size(); i++)
+    {
+      const std::string studyInstanceUid = Orthanc::SerializationToolbox::ReadString(series[i], "study-instance-uid");
+      std::set<std::string>::const_iterator found = unusedStudies.find(studyInstanceUid);
+      if (found != unusedStudies.end())
+      {
+        target.append(series[i]);
+      }
+    }
   }
 
 
