@@ -30,11 +30,14 @@
 #include "ProjectPermissionContext.h"
 #include "RestApiRouter.h"
 
+#include <Images/Image.h>
+#include <Images/ImageProcessing.h>
 #include <MultiThreading/Semaphore.h>
 #include <SerializationToolbox.h>
 #include <SystemToolbox.h>
 
 #include <boost/algorithm/string/predicate.hpp>
+#include <boost/math/special_functions/round.hpp>
 #include <cassert>
 
 
@@ -436,7 +439,159 @@ void ChangeProjectParameter(OrthancPluginRestOutput* output,
 }
 
 
-static Orthanc::Semaphore previewThrottler_(8);
+
+
+class Thumbnail : public boost::noncopyable
+{
+private:
+  const OrthancPlugins::OrthancImage&      source_;
+  std::unique_ptr<Orthanc::ImageAccessor>  modified_;
+
+public:
+  Thumbnail(const OrthancPlugins::OrthancImage& source) :
+    source_(source)
+  {
+  }
+
+  Orthanc::PixelFormat GetFormat() const
+  {
+    if (modified_.get() == NULL)
+    {
+      switch (source_.GetPixelFormat())
+      {
+        case OrthancPluginPixelFormat_Grayscale8:
+          return Orthanc::PixelFormat_Grayscale8;
+
+        case OrthancPluginPixelFormat_RGB24:
+          return Orthanc::PixelFormat_RGB24;
+
+        default:
+          throw Orthanc::OrthancException(Orthanc::ErrorCode_NotImplemented);
+      }
+    }
+    else
+    {
+      return modified_->GetFormat();
+    }
+  }
+
+  unsigned int GetWidth() const
+  {
+    if (modified_.get() == NULL)
+    {
+      return source_.GetWidth();
+    }
+    else
+    {
+      return modified_->GetWidth();
+    }
+  }
+
+  unsigned int GetHeight() const
+  {
+    if (modified_.get() == NULL)
+    {
+      return source_.GetHeight();
+    }
+    else
+    {
+      return modified_->GetHeight();
+    }
+  }
+
+  void GetAccessor(Orthanc::ImageAccessor& accessor) const
+  {
+    if (modified_.get() == NULL)
+    {
+      accessor.AssignReadOnly(GetFormat(), source_.GetWidth(), source_.GetHeight(), source_.GetPitch(), source_.GetBuffer());
+    }
+    else
+    {
+      modified_->GetReadOnlyAccessor(accessor);
+    }
+  }
+
+  void Resize(unsigned int width,
+              unsigned int height,
+              bool smooth)
+  {
+    Orthanc::ImageAccessor current;
+    GetAccessor(current);
+
+    std::unique_ptr<Orthanc::ImageAccessor> resized(new Orthanc::Image(current.GetFormat(), width, height, false));
+
+    if (smooth &&
+        width < current.GetWidth() &&
+        height < current.GetHeight())  // Only smooth if downscaling
+    {
+      if (modified_.get() == NULL)
+      {
+        std::unique_ptr<Orthanc::ImageAccessor> smoothed(Orthanc::Image::Clone(current));
+        Orthanc::ImageProcessing::SmoothGaussian5x5(*smoothed, false);
+        Orthanc::ImageProcessing::Resize(*resized, *smoothed);
+      }
+      else
+      {
+        // The smoothing can be done inplace, as "resized" will overwrite "modified_"
+        Orthanc::ImageProcessing::SmoothGaussian5x5(*modified_, false);
+        Orthanc::ImageProcessing::Resize(*resized, *modified_);
+      }
+    }
+    else
+    {
+      Orthanc::ImageProcessing::Resize(*resized, current);
+    }
+
+    modified_.reset(resized.release());
+  }
+};
+
+
+
+static unsigned int THUMBNAIL_WIDTH = 128;
+static unsigned int THUMBNAIL_HEIGHT = 128;
+
+
+/**
+ * NB: "OrthancPlugins::OrthancImage" is used instead of "Orthanc::Image"
+ * to avoid linking the education plugin against libjpeg
+ **/
+static void ResizeThumbnail(OrthancPlugins::OrthancImage& target,
+                            const OrthancPlugins::OrthancImage& source)
+{
+  assert(target.GetWidth() == THUMBNAIL_WIDTH);
+  assert(target.GetHeight() == THUMBNAIL_HEIGHT);
+
+  Thumbnail thumbnail(source);
+
+  while (thumbnail.GetWidth() / 2 > target.GetWidth() ||
+         thumbnail.GetHeight() / 2 > target.GetHeight())
+  {
+    // Smooth once we reach the end of the successive resizings
+    const bool smooth = (thumbnail.GetWidth() <= 4 * target.GetWidth() &&
+                         thumbnail.GetHeight() <= 4 * target.GetHeight());
+    thumbnail.Resize(thumbnail.GetWidth() / 2, thumbnail.GetHeight() / 2, smooth);
+  }
+
+  const float ratio = std::min(static_cast<float>(target.GetWidth()) / static_cast<float>(thumbnail.GetWidth()),
+                               static_cast<float>(target.GetHeight()) / static_cast<float>(thumbnail.GetHeight()));
+  thumbnail.Resize(static_cast<unsigned int>(boost::math::llround(static_cast<float>(thumbnail.GetWidth()) * ratio)),
+                   static_cast<unsigned int>(boost::math::llround(static_cast<float>(thumbnail.GetHeight()) * ratio)),
+                   true /* smooth by default */);
+
+  unsigned int offsetX = (target.GetWidth() - thumbnail.GetWidth()) / 2;
+  unsigned int offsetY = (target.GetHeight() - thumbnail.GetHeight()) / 2;
+
+  Orthanc::ImageAccessor targetAccessor;
+  targetAccessor.AssignWritable(thumbnail.GetFormat(), target.GetWidth(), target.GetHeight(), target.GetPitch(), target.GetBuffer());
+
+  Orthanc::ImageAccessor region;
+  targetAccessor.GetRegion(region, offsetX, offsetY, thumbnail.GetWidth(), thumbnail.GetHeight());
+
+  Orthanc::ImageAccessor thumbnailAccessor;
+  thumbnail.GetAccessor(thumbnailAccessor);
+  Orthanc::ImageProcessing::Copy(region, thumbnailAccessor);
+}
 
 
 template <Orthanc::ResourceType level>
@@ -502,6 +657,7 @@ void GeneratePreview(OrthancPluginRestOutput* output,
   }
 
   {
+    static Orthanc::Semaphore previewThrottler_(4);
     Orthanc::Semaphore::Locker locker(previewThrottler_);
 
     OrthancPlugins::HttpHeaders headers;
@@ -581,15 +737,19 @@ void GeneratePreview(OrthancPluginRestOutput* output,
         throw Orthanc::OrthancException(Orthanc::ErrorCode_InternalError);
     }
 
-    if (!success)
-    {
-      OrthancPlugins::OrthancImage white(OrthancPluginPixelFormat_Grayscale8, 128, 128);
-      memset(white.GetBuffer(), 255, white.GetWidth() * white.GetHeight());
+    OrthancPlugins::OrthancImage thumbnail(OrthancPluginPixelFormat_Grayscale8, THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT);
+    memset(thumbnail.GetBuffer(), 128, thumbnail.GetWidth() * thumbnail.GetHeight());
 
-      OrthancPlugins::MemoryBuffer jpeg;
-      white.CompressJpegImage(jpeg, 70);
-      jpeg.ToString(preview);
+    if (success)
+    {
+      OrthancPlugins::OrthancImage decoded;
+      decoded.UncompressJpegImage(preview.empty() ? NULL : preview.c_str(), preview.size());
+      ResizeThumbnail(thumbnail, decoded);
     }
+
+    OrthancPlugins::MemoryBuffer jpeg;
+    thumbnail.CompressJpegImage(jpeg, 70);
+    jpeg.ToString(preview);
   }
 
   std::string b64;
