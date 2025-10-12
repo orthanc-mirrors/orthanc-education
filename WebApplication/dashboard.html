@@ -262,7 +262,7 @@
                                     <i class="fa fa-times" @click="unlinkResource(resource, projectsIndex[project].id)"></i>
                                   </button>
                                 </span>
-                                <button class="btn btn-sm btn-success ms-2" @click="addProjectToImage(resource)"
+                                <button class="btn btn-sm btn-success ms-2" @click="linkImageWithProject(resource)"
                                         v-if="editImagesSwitch"
                                         data-bs-toggle="tooltip" data-bs-placement="top" title="Add the image to a project">
                                   <i class="fa fa-plus"></i>
@@ -669,6 +669,33 @@
               <button type="button" class="btn btn-primary" data-bs-dismiss="modal" v-if="!editProjectsSwitch">Close</button>
               <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" v-if="editProjectsSwitch">Cancel</button>
               <button type="button" class="btn btn-primary" @click="modalEditLearnersSave()" v-if="editProjectsSwitch">Save</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="modalLinkImageWithProject" class="modal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">Link image with a project</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <form action="javascript:void(0);">
+                <div class="row mb-3">
+                  <label for="modalLinkImageWithProjectAvailable" class="col-sm-4 col-form-label">Available projects:</label>
+                  <div class="col-sm-8">
+                    <select class="form-select" id="modalLinkImageWithProjectAvailable" v-model="modalLinkImageWithProjectSelected" >
+                      <option v-for="project in modalLinkImageWithProjectAvailable" :value="project.id">{{project.name}}</option>
+                    </select>
+                  </div>
+                </div>
+              </form>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+              <button type="button" class="btn btn-primary" @click="modalLinkImageWithProjectSave()">Link</button>
             </div>
           </div>
         </div>

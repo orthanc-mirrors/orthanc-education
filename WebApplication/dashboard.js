@@ -55,6 +55,9 @@ var app = new Vue({
       modalEditInstructors: '',
       modalEditLearnersArea: '',
       modalEditLearners: '',
+      modalLinkImageWithProject: '',
+      modalLinkImageWithProjectSelected: '',
+      modalLinkImageWithProjectAvailable: [],
 
       editProjectsSwitch: false,
       editImagesSwitch: false,
@@ -98,6 +101,7 @@ var app = new Vue({
     this.modalProjectParameters = new bootstrap.Modal(document.getElementById('modalProjectParameters'), {});
     this.modalEditInstructors = new bootstrap.Modal(document.getElementById('modalEditInstructors'), {});
     this.modalEditLearners = new bootstrap.Modal(document.getElementById('modalEditLearners'), {});
+    this.modalLinkImageWithProject = new bootstrap.Modal(document.getElementById('modalLinkImageWithProject'), {});
 
     var that = this;
     axios
@@ -453,6 +457,33 @@ var app = new Vue({
     openListProject: function() {
       var url = 'list-projects.html?open-project-id=' + encodeURIComponent(this.projectIdForContent);
       window.open(url, '_blank').focus();
+    },
+
+    linkImageWithProject: function(resource) {
+      this.modalLinkImageWithProjectAvailable = [];
+      this.projects.forEach((project) => {
+        if (!resource.projects.includes(project.id)) {
+          this.modalLinkImageWithProjectAvailable.push(project);
+        }
+      });
+
+      if (this.modalLinkImageWithProjectAvailable.length == 0) {
+        alert('This image is already associated with all the available projects');
+      } else {
+        this.modalLinkImageWithProjectSelected = this.modalLinkImageWithProjectAvailable[0].id;
+        var that = this;
+        this.modalLinkImageWithProjectSave = function(event) {
+          that.modalLinkImageWithProject.hide();
+          axios.post('../api/link', {
+            resource: resource,
+            project: that.modalLinkImageWithProjectSelected
+          })
+            .then(function(res) {
+              that.reloadImages();
+            });
+        }
+        this.modalLinkImageWithProject.show();
+      }
     }
   }
 });

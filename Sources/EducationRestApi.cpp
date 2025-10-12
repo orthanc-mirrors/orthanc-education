@@ -690,17 +690,30 @@ void LinkResourceWithProject(OrthancPluginRestOutput* output,
 {
   assert(user.GetRole() == Role_Administrator);
 
-  const std::string data = Orthanc::SerializationToolbox::ReadString(body, "data");
   const std::string label = LABEL_PREFIX + Orthanc::SerializationToolbox::ReadString(body, "project");
 
   Orthanc::ResourceType level;
   std::string resourceId;
 
-  if (OrthancDatabase::LookupResourceByUserInput(level, resourceId, data))
+  Json::Value resource;
+  if (HttpToolbox::LookupJsonObject(resource, body, "resource"))
   {
-    std::string path;
-    switch (level)
+    resourceId = Orthanc::SerializationToolbox::ReadString(resource, "resource-id");
+    level = Orthanc::ParseStringAsResourceLevel(Orthanc::SerializationToolbox::ReadString(resource, "level");
+  }
+  else
+  {
+    const std::string data = Orthanc::SerializationToolbox::ReadString(body, "data");
+
+    if (!OrthancDatabase::LookupResourceByUserInput(level, resourceId, data))
     {
+      throw Orthanc::OrthancException(Orthanc::ErrorCode_UnknownResource);
+    }
+  }
+
+  std::string path;
+  switch (level)
+  {
     case Orthanc::ResourceType_Study:
       path = "/studies/" + resourceId;
       break;
@@ -715,17 +728,12 @@ void LinkResourceWithProject(OrthancPluginRestOutput* output,
 
     default:
       throw Orthanc::OrthancException(Orthanc::ErrorCode_InternalError);
-    }
+  }
 
-    Json::Value dummy;
-    if (OrthancPlugins::RestApiPut(dummy, path + "/labels/" + label, std::string(), false))
-    {
-      HttpToolbox::AnswerText(output, "");
-    }
-    else
-    {
-      throw Orthanc::OrthancException(Orthanc::ErrorCode_UnknownResource);
-    }
+  Json::Value dummy;
+  if (OrthancPlugins::RestApiPut(dummy, path + "/labels/" + label, std::string(), false))
+  {
+    HttpToolbox::AnswerText(output, "");
   }
   else
   {
