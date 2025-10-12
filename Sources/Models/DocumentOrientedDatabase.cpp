@@ -45,17 +45,6 @@ void DocumentOrientedDatabase::Clear()
 }
 
 
-void DocumentOrientedDatabase::UpdateLargestIntegerKey(const std::string& key)
-{
-  uint64_t keyAsInteger;
-
-  if (Orthanc::SerializationToolbox::ParseUnsignedInteger64(keyAsInteger, key))
-  {
-    largestIntegerKey_ = std::max(largestIntegerKey_, keyAsInteger);
-  }
-}
-
-
 void DocumentOrientedDatabase::StoreInternal(const std::string& key,
                                              ISerializableDocument* value,
                                              const std::string& serialized)
@@ -77,8 +66,6 @@ void DocumentOrientedDatabase::StoreInternal(const std::string& key,
     found->second = protection.release();
   }
 
-  UpdateLargestIntegerKey(key);
-
   {
     // Only modify the Orthanc database once we're sure the memory has been properly updated
     OrthancPlugins::KeyValueStore store(storeId_);
@@ -90,8 +77,7 @@ void DocumentOrientedDatabase::StoreInternal(const std::string& key,
 DocumentOrientedDatabase::DocumentOrientedDatabase(const std::string& storeId,
                                                    IDocumentUnserializer* unserializer /* takes ownership */) :
   storeId_(storeId),
-  unserializer_(unserializer),
-  largestIntegerKey_(0)
+  unserializer_(unserializer)
 {
   if (unserializer == NULL)
   {
@@ -116,8 +102,6 @@ void DocumentOrientedDatabase::Load()
     {
       throw Orthanc::OrthancException(Orthanc::ErrorCode_InternalError);
     }
-
-    UpdateLargestIntegerKey(iterator->GetKey());
 
     std::string serialized;
     iterator->GetValue(serialized);
@@ -164,33 +148,6 @@ void DocumentOrientedDatabase::Store(const std::string& key,
   {
     boost::unique_lock<boost::shared_mutex> lock(mutex_);
     StoreInternal(key, protection.release(), value);
-  }
-}
-
-
-std::string DocumentOrientedDatabase::StoreWithAutoincrementedKey(ISerializableDocument* document /* takes ownership */)
-{
-  std::unique_ptr<ISerializableDocument> protection(document);
-
-  if (document == NULL)
-  {
-    throw Orthanc::OrthancException(Orthanc::ErrorCode_NullPointer);
-  }
-
-  Json::Value serialized;
-  protection->Serialize(serialized);
-
-  std::string value;
-  Orthanc::Toolbox::WriteFastJson(value, serialized);
-
-  {
-    boost::unique_lock<boost::shared_mutex> lock(mutex_);
-
-    const std::string key = boost::lexical_cast<std::string>(largestIntegerKey_ + 1);
-
-    StoreInternal(key, protection.release(), value);
-
-    return key;
   }
 }
 

@@ -68,6 +68,7 @@ private:
   bool                   hasPluginWholeSlideImaging_;
   bool                   hasPluginOhif_;
 
+  unsigned int           sequenceProjectIds_;
 
   EducationConfiguration();
 
@@ -170,6 +171,8 @@ public:
   void SetPluginOhif(bool present);
 
   void ListAvailableViewers(std::set<ViewerType>& target);
+
+  std::string GenerateProjectId();
 
   AuthenticatedUser* DoLoginAuthentication(const std::string& username,
                                            const std::string& password);

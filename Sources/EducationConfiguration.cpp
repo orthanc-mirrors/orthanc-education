@@ -33,13 +33,14 @@
 #include <boost/algorithm/string/predicate.hpp>
 
 
-static const int32_t GLOBAL_PROPERTY_EDUCATION_SETTINGS = 5000;
+static const int32_t GLOBAL_PROPERTY_EDUCATION_SETTINGS = 9522;
 
 static const char* const FIELD_LTI_PLATFORM_KEYS_URL = "lti-platform-keys-url";
 static const char* const FIELD_LTI_PLATFORM_REDIRECTION_URL = "lti-platform-redirection-url";
 static const char* const FIELD_LTI_CLIENT_ID = "lti-client-id";
 static const char* const FIELD_LTI_PRIVATE_KEY = "lti-private-key";
 static const char* const FIELD_LTI_PRIVATE_KEY_ID = "lti-private-key-id";
+static const char* const FIELD_LTI_SEQUENCE_PROJECT_IDS = "sequence-project-ids";
 
 
 EducationConfiguration::EducationConfiguration() :
@@ -53,7 +54,8 @@ EducationConfiguration::EducationConfiguration() :
   hasPluginStoneWebViewer_(false),
   hasPluginVolView_(false),
   hasPluginWholeSlideImaging_(false),
-  hasPluginOhif_(false)
+  hasPluginOhif_(false),
+  sequenceProjectIds_(0)
 {
 }
 
@@ -82,6 +84,7 @@ void EducationConfiguration::SaveToGlobalPropertyUnsafe()
 
   value[FIELD_LTI_PLATFORM_KEYS_URL] = ltiPlatformKeysUrlFromRegistration_;
   value[FIELD_LTI_PLATFORM_REDIRECTION_URL] = ltiPlatformRedirectionUrlFromRegistration_;
+  value[FIELD_LTI_SEQUENCE_PROJECT_IDS] = sequenceProjectIds_;
 
   std::string property = value.toStyledString();
   OrthancPluginSetGlobalProperty(OrthancPlugins::GetGlobalContext(), GLOBAL_PROPERTY_EDUCATION_SETTINGS, property.c_str());
@@ -115,6 +118,7 @@ void EducationConfiguration::LoadFromGlobalProperty()
 
     ltiPlatformKeysUrlFromRegistration_ = Orthanc::SerializationToolbox::ReadString(config, FIELD_LTI_PLATFORM_KEYS_URL, "");
     ltiPlatformRedirectionUrlFromRegistration_ = Orthanc::SerializationToolbox::ReadString(config, FIELD_LTI_PLATFORM_REDIRECTION_URL, "");
+    sequenceProjectIds_ = Orthanc::SerializationToolbox::ReadUnsignedInteger(config, FIELD_LTI_SEQUENCE_PROJECT_IDS, 0);
   }
 
   if (createKey)
@@ -613,6 +617,21 @@ void EducationConfiguration::ListAvailableViewers(std::set<ViewerType>& target)
       target.insert(ViewerType_OHIF_Segmentation);
     }
   }
+}
+
+
+std::string EducationConfiguration::GenerateProjectId()
+{
+  unsigned int generated;
+
+  {
+    boost::unique_lock<boost::shared_mutex> lock(mutex_);
+    generated = sequenceProjectIds_;
+    sequenceProjectIds_ ++;
+    SaveToGlobalPropertyUnsafe();
+  }
+
+  return boost::lexical_cast<std::string>(generated);
 }
 
 

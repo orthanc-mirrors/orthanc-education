@@ -42,11 +42,8 @@ private:
   std::string                             storeId_;
   std::unique_ptr<IDocumentUnserializer>  unserializer_;
   Documents                               documents_;
-  uint64_t                                largestIntegerKey_;
 
   void Clear();
-
-  void UpdateLargestIntegerKey(const std::string& key);
 
   void StoreInternal(const std::string& key,
                      ISerializableDocument* value,
@@ -65,8 +62,6 @@ public:
 
   void Store(const std::string& key,
              ISerializableDocument* document /* takes ownership */);
-
-  std::string StoreWithAutoincrementedKey(ISerializableDocument* document /* takes ownership */);
 
   void Remove(const std::string& key);
 

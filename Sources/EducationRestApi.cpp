@@ -1115,7 +1115,8 @@ void HandleProjectsConfiguration(OrthancPluginRestOutput* output,
       Json::Value value;
       project->Serialize(value);
 
-      ProjectPermissionContext::GetProjects().StoreWithAutoincrementedKey(project.release());
+      const std::string key = EducationConfiguration::GetInstance().GenerateProjectId();
+      ProjectPermissionContext::GetProjects().Store(key, project.release());
       HttpToolbox::AnswerText(output, "");
     }
   }
