@@ -699,7 +699,7 @@ void LinkResourceWithProject(OrthancPluginRestOutput* output,
   if (HttpToolbox::LookupJsonObject(resource, body, "resource"))
   {
     resourceId = Orthanc::SerializationToolbox::ReadString(resource, "resource-id");
-    level = Orthanc::ParseStringAsResourceLevel(Orthanc::SerializationToolbox::ReadString(resource, "level");
+    level = Orthanc::StringToResourceType(Orthanc::SerializationToolbox::ReadString(resource, "level").c_str());
   }
   else
   {
@@ -742,6 +742,23 @@ void LinkResourceWithProject(OrthancPluginRestOutput* output,
 }
 
 
+static void CallListUnusedResources(Json::Value& answer,
+                                    Orthanc::ResourceType level)
+{
+  std::set<std::string> allProjectIds;
+
+  {
+    DocumentOrientedDatabase::Iterator iterator(ProjectPermissionContext::GetProjects());
+    while (iterator.Next())
+    {
+      allProjectIds.insert(iterator.GetKey());
+    }
+  }
+
+  OrthancDatabase::ListUnusedResources(answer, level, allProjectIds);
+}
+
+
 void ListImages(OrthancPluginRestOutput* output,
                 const std::string& url,
                 const OrthancPluginHttpRequest* request,
@@ -758,9 +775,13 @@ void ListImages(OrthancPluginRestOutput* output,
   {
     OrthancDatabase::ListAllStudies(answer);
   }
-  else if (project == "_no-project")
+  else if (project == "_unused-studies")
   {
-    throw Orthanc::OrthancException(Orthanc::ErrorCode_NotImplemented);
+    CallListUnusedResources(answer, Orthanc::ResourceType_Study);
+  }
+  else if (project == "_unused-series")
+  {
+    CallListUnusedResources(answer, Orthanc::ResourceType_Series);
   }
   else
   {

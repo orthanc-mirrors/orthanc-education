@@ -194,8 +194,9 @@
                         <label for="selectedProjectForImages" class="col-sm-4 col-form-label">Filter by project:</label>
                         <div class="col-sm-8">
                           <select class="form-select" id="selectedProjectForImages" v-model="projectIdForImages" >
-                            <option value="_no-project" selected>Images without a project</option>
-                            <option value="_all-studies" selected>All studies</option>
+                            <option value="_unused-studies" selected>[ DICOM studies without a project ]</option>
+                            <option value="_unused-series" selected>[ DICOM series without a project ]</option>
+                            <option value="_all-studies" selected>[ All DICOM studies ]</option>
                             <option v-for="project in projects" :value="project.id">{{project.name}}</option>
                           </select>
                         </div>

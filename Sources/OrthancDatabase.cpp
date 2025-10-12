@@ -62,16 +62,16 @@ static std::string FormatResourcePath(Orthanc::ResourceType level,
 
 enum ProjectsConstraint
 {
-  ProjectsConstraint_None,
-  ProjectsConstraint_Any
+  ProjectsConstraint_Ignored, // Look for all the DICOM resources, independently of their associated projects
+  ProjectsConstraint_Any,     // Look for DICOM resources associated with a given subset of projects
+  ProjectsConstraint_None     // Look for DICOM resources that are not associated with projects
 };
 
 
 static void ExecuteFind(Json::Value& resources,
                         Orthanc::ResourceType level,
                         ProjectsConstraint constraint,
-                        const std::set<std::string>& projects,
-                        const std::list<std::string>& tags)
+                        const std::set<std::string>& projects)
 {
   Json::Value labels = Json::arrayValue;
   for (std::set<std::string>::const_iterator it = projects.begin(); it != projects.end(); ++it)
@@ -83,26 +83,40 @@ static void ExecuteFind(Json::Value& resources,
   responseContent.append("Labels");
   responseContent.append("Metadata");
 
+  std::list<std::string> titleTags;
   Json::Value requestedTags = Json::arrayValue;
 
-  // WARNING: Do not add "break" below!
   switch (level)
   {
-    case Orthanc::ResourceType_Instance:
-      requestedTags.append("SOPInstanceUID");
-
-    case Orthanc::ResourceType_Series:
-      requestedTags.append("SeriesInstanceUID");
-
     case Orthanc::ResourceType_Study:
       requestedTags.append("StudyInstanceUID");
+      titleTags.push_back("PatientName");
+      titleTags.push_back("StudyDescription");
+      break;
+
+    case Orthanc::ResourceType_Series:
+      requestedTags.append("StudyInstanceUID");
+      requestedTags.append("SeriesInstanceUID");
+      titleTags.push_back("PatientName");
+      titleTags.push_back("StudyDescription");
+      titleTags.push_back("SeriesDescription");
+      break;
+
+    case Orthanc::ResourceType_Instance:
+      requestedTags.append("StudyInstanceUID");
+      requestedTags.append("SeriesInstanceUID");
+      requestedTags.append("SOPInstanceUID");
+      titleTags.push_back("PatientName");
+      titleTags.push_back("StudyDescription");
+      titleTags.push_back("SeriesDescription");
+      titleTags.push_back("InstanceNumber");
       break;
 
     default:
       throw Orthanc::OrthancException(Orthanc::ErrorCode_InternalError);
   }
 
-  for (std::list<std::string>::const_iterator it = tags.begin(); it != tags.end(); ++it)
+  for (std::list<std::string>::const_iterator it = titleTags.begin(); it != titleTags.end(); ++it)
   {
     requestedTags.append(*it);
   }
@@ -114,18 +128,19 @@ static void ExecuteFind(Json::Value& resources,
   request["ResponseContent"] = responseContent;
   request["RequestedTags"] = requestedTags;
 
-  if (constraint != ProjectsConstraint_None)
-  {
-    request["Labels"] = labels;
-  }
-
   switch (constraint)
   {
-  case ProjectsConstraint_None:
+  case ProjectsConstraint_Ignored:
     break;
 
   case ProjectsConstraint_Any:
+    request["Labels"] = labels;
     request["LabelsConstraint"] = "Any";
+    break;
+
+  case ProjectsConstraint_None:
+    request["Labels"] = labels;
+    request["LabelsConstraint"] = "None";
     break;
 
   default:
@@ -161,7 +176,7 @@ static void ExecuteFind(Json::Value& resources,
 
     if (title.empty())
     {
-      for (std::list<std::string>::const_iterator it = tags.begin(); it != tags.end(); ++it)
+      for (std::list<std::string>::const_iterator it = titleTags.begin(); it != titleTags.end(); ++it)
       {
         std::map<std::string, std::string>::const_iterator found = resourceTags.find(*it);
         if (found != resourceTags.end())
@@ -225,12 +240,11 @@ static void ExecuteFind(Json::Value& resources,
 
 static void ExecuteFindForProject(Json::Value& resources,
                                  Orthanc::ResourceType level,
-                                 const std::string& projectId,
-                                 const std::list<std::string>& tags)
+                                 const std::string& projectId)
 {
   std::set<std::string> projects;
   projects.insert(projectId);
-  ExecuteFind(resources, level, ProjectsConstraint_Any, projects, tags);
+  ExecuteFind(resources, level, ProjectsConstraint_Any, projects);
 }
 
 
@@ -542,14 +556,17 @@ namespace OrthancDatabase
   void ListAllStudies(Json::Value& target)
   {
     target.clear();
-
     std::set<std::string> projects;
-    std::list<std::string> requestedTags;
+    ExecuteFind(target, Orthanc::ResourceType_Study, ProjectsConstraint_Ignored, projects);
+  }
 
-    requestedTags.clear();
-    requestedTags.push_back("PatientName");
-    requestedTags.push_back("StudyDescription");
-    ExecuteFind(target, Orthanc::ResourceType_Study, ProjectsConstraint_None, projects, requestedTags);
+
+  void ListUnusedResources(Json::Value& target,
+                           Orthanc::ResourceType level,
+                           const std::set<std::string>& allProjectIds)
+  {
+    target.clear();
+    ExecuteFind(target, level, ProjectsConstraint_None, allProjectIds);
   }
 
 
@@ -557,26 +574,9 @@ namespace OrthancDatabase
                               const std::string& projectId)
   {
     target.clear();
-
-    std::list<std::string> requestedTags;
-
-    requestedTags.clear();
-    requestedTags.push_back("PatientName");
-    requestedTags.push_back("StudyDescription");
-    ExecuteFindForProject(target, Orthanc::ResourceType_Study, projectId, requestedTags);
-
-    requestedTags.clear();
-    requestedTags.push_back("PatientName");
-    requestedTags.push_back("StudyDescription");
-    requestedTags.push_back("SeriesDescription");
-    ExecuteFindForProject(target, Orthanc::ResourceType_Series, projectId, requestedTags);
-
-    requestedTags.clear();
-    requestedTags.push_back("PatientName");
-    requestedTags.push_back("StudyDescription");
-    requestedTags.push_back("SeriesDescription");
-    requestedTags.push_back("InstanceNumber");
-    ExecuteFindForProject(target, Orthanc::ResourceType_Instance, projectId, requestedTags);
+    ExecuteFindForProject(target, Orthanc::ResourceType_Study, projectId);
+    ExecuteFindForProject(target, Orthanc::ResourceType_Series, projectId);
+    ExecuteFindForProject(target, Orthanc::ResourceType_Instance, projectId);
   }
 
 
