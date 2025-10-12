@@ -340,6 +340,10 @@ std::string EducationConfiguration::GetLtiPlatformKeysUrl()
   {
     return ltiPlatformKeysUrlFromRegistration_;
   }
+  else if (ltiPlatformUrl_.empty())
+  {
+    return "";
+  }
   else
   {
     // The following default URL corresponds to Moodle
@@ -383,6 +387,10 @@ std::string EducationConfiguration::GetLtiPlatformRedirectionUrl()
   else if (!ltiPlatformRedirectionUrlFromRegistration_.empty())
   {
     return ltiPlatformRedirectionUrlFromRegistration_;
+  }
+  else if (ltiPlatformUrl_.empty())
+  {
+    return "";
   }
   else
   {

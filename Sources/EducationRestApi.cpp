@@ -277,6 +277,7 @@ void ServeConfiguration(OrthancPluginRestOutput* output,
   {
     // This information is available to "dashboard.html", but not to "list-projects.html"
     config["has_orthanc_explorer_2"] = EducationConfiguration::GetInstance().HasPluginOrthancExplorer2();
+    config["lti_enabled"] = EducationConfiguration::GetInstance().IsLtiEnabled();
     config["lti_client_id"] = EducationConfiguration::GetInstance().GetLtiClientId();
     config["lti_platform_url"] = EducationConfiguration::GetInstance().GetLtiPlatformUrl();
     config["lti_platform_keys_url"] = EducationConfiguration::GetInstance().GetLtiPlatformKeysUrl();

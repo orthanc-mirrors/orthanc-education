@@ -10,6 +10,7 @@ Files:
   README
   TODO
   Resources/Images/*.png
+  Resources/IntegrationTests/config.json
 Copyright: 2024-2025 Sebastien Jodogne, EPL UCLouvain (Belgium)
 License: CC0-1.0
 

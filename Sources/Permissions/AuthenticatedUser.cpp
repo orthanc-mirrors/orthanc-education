@@ -30,10 +30,10 @@
 
 
 static const char* const FIELD_ROLE = "role";
-static const char* const FIELD_INSTRUCTOR = "instructor-of";
-static const char* const FIELD_LEARNER = "learner-of";
+static const char* const FIELD_INSTRUCTOR = "instructor_of";
+static const char* const FIELD_LEARNER = "learner_of";
 static const char* const FIELD_ID = "id";
-static const char* const FIELD_LTI_PROJECT_ID = "lti-project-id";
+static const char* const FIELD_LTI_PROJECT_ID = "lti_project_id";
 
 
 void AuthenticatedUser::Serialize(Json::Value& payload) const

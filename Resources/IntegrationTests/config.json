@@ -1,0 +1,21 @@
+{
+  "Plugins" : [ "." ],
+  "StorageDirectory" : "/tmp/OrthancEducationStorage",
+  "Education" : {
+    "Enabled" : true,
+    "AuthenticationHttpHeader" : "Mail",
+    "Administrators" : {
+      "Authentication" : "RestrictedHttpHeader",
+      "RestrictedHeaders" : [
+        "admin@uclouvain.be"
+      ]
+    },
+    "StandardUsers" : {
+      "Authentication" : "RestrictedHttpHeader",
+      "RestrictedHeaders" : [
+        "instructor@uclouvain.be",
+        "learner@uclouvain.be"
+      ]
+    }
+  }
+}
