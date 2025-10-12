@@ -1029,6 +1029,26 @@ void UnlinkResourceFromProject(OrthancPluginRestOutput* output,
 }
 
 
+static void FormatSingleProjectConfiguration(Json::Value& item,
+                                             const std::string& projectId,
+                                             const Project& project)
+{
+  item["id"] = projectId;
+  item["name"] = project.GetName();
+  item["description"] = project.GetDescription();
+  item["policy"] = EnumerationToString(project.GetPolicy());
+  item["primary_viewer"] = EnumerationToString(project.GetPrimaryViewer());
+  HttpToolbox::FormatViewers(item["secondary_viewers"], project.GetSecondaryViewers());
+  HttpToolbox::CopySetOfStrings(item["instructors"], project.GetInstructors());
+  HttpToolbox::CopySetOfStrings(item["learners"], project.GetLearners());
+
+  if (project.HasLtiContextId())
+  {
+    item["lti_context_id"] = project.GetLtiContextId();
+  }
+}
+
+
 void HandleProjectsConfiguration(OrthancPluginRestOutput* output,
                                  const std::string& url,
                                  const OrthancPluginHttpRequest* request,
@@ -1046,23 +1066,8 @@ void HandleProjectsConfiguration(OrthancPluginRestOutput* output,
 
       while (iterator.Next())
       {
-        const Project& project = iterator.GetDocument<Project>();
-
         Json::Value item;
-        item["id"] = iterator.GetKey();
-        item["name"] = project.GetName();
-        item["description"] = project.GetDescription();
-        item["policy"] = EnumerationToString(project.GetPolicy());
-        item["primary_viewer"] = EnumerationToString(project.GetPrimaryViewer());
-        HttpToolbox::FormatViewers(item["secondary_viewers"], project.GetSecondaryViewers());
-        HttpToolbox::CopySetOfStrings(item["instructors"], project.GetInstructors());
-        HttpToolbox::CopySetOfStrings(item["learners"], project.GetLearners());
-
-        if (project.HasLtiContextId())
-        {
-          item["lti_context_id"] = project.GetLtiContextId();
-        }
-
+        FormatSingleProjectConfiguration(item, iterator.GetKey(), iterator.GetDocument<Project>());
         projects.append(item);
       }
     }
@@ -1142,7 +1147,7 @@ void HandleSingleProject(OrthancPluginRestOutput* output,
     else
     {
       Json::Value answer;
-      OrthancDatabase::FormatProjectWithResources(answer, projectId, *project);
+      FormatSingleProjectConfiguration(answer, projectId, *project);
       HttpToolbox::AnswerJson(output, answer);
     }
   }

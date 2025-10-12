@@ -283,6 +283,66 @@ class Orthanc(unittest.TestCase):
             self.check_url('wsi/app/viewer.html?instance=toto', r)
 
 
+    def test_create_project(self):
+        for headers in [
+                InstructorHeaders(),
+                LearnerHeaders(),
+                GuestHeaders(),
+        ]:
+            self.assertEqual(403, requests.get(URL + '/education/api/projects', headers = headers).status_code)
+
+        projects = requests.get(URL + '/education/api/projects', headers = AdministratorHeaders()).json()
+        self.assertEqual(0, len(projects))
+
+        body = {
+            'name' : 'Hello',
+            'description' : 'World',
+        }
+
+        for headers in [
+                InstructorHeaders(),
+                LearnerHeaders(),
+                GuestHeaders(),
+        ]:
+            self.assertEqual(403, requests.post(URL + '/education/api/projects', json.dumps(body), headers = headers).status_code)
+
+        r = requests.post(URL + '/education/api/projects', json.dumps(body), headers = AdministratorHeaders())
+        self.assertEqual(0, len(r.content))
+
+        projects = requests.get(URL + '/education/api/projects', headers = AdministratorHeaders()).json()
+        self.assertEqual(1, len(projects))
+
+        self.assertEqual('Hello', projects[0]['name'])
+        self.assertEqual('World', projects[0]['description'])
+        self.assertEqual(0, len(projects[0]['instructors']))
+        self.assertEqual(0, len(projects[0]['learners']))
+        self.assertEqual('hidden', projects[0]['policy'])
+        self.assertEqual('stone', projects[0]['primary_viewer'])
+        self.assertEqual(0, len(projects[0]['secondary_viewers']))
+
+        for headers in [
+                InstructorHeaders(),
+                LearnerHeaders(),
+                GuestHeaders(),
+        ]:
+            self.assertEqual(403, requests.get(URL + '/education/api/projects/%s' % projects[0]['id'], headers = headers).status_code)
+
+        project = requests.get(URL + '/education/api/projects/%s' % projects[0]['id'], headers = AdministratorHeaders()).json()
+        self.assertEqual(project, projects[0])
+
+        for headers in [
+                InstructorHeaders(),
+                LearnerHeaders(),
+                GuestHeaders(),
+        ]:
+            self.assertEqual(403, requests.delete(URL + '/education/api/projects/%s' % projects[0]['id'], headers = headers).status_code)
+
+        requests.delete(URL + '/education/api/projects/%s' % projects[0]['id'], headers = AdministratorHeaders())
+
+        projects = requests.get(URL + '/education/api/projects', headers = AdministratorHeaders()).json()
+        self.assertEqual(0, len(projects))
+
+
 try:
     print('\nStarting the tests...')
     unittest.main(argv = [ sys.argv[0] ] + args.options)
