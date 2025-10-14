@@ -112,6 +112,8 @@ class Orthanc(unittest.TestCase):
 
 
     def test_config(self):
+        requests.put(URL + '/education/api/config/lti-client-id', json.dumps(''), headers = AdministratorHeaders()).raise_for_status()
+
         config = requests.get(URL + '/education/api/config', headers = AdministratorHeaders()).json()
         self.assertEqual('admin', config['user']['role'])
         self.assertEqual('admin@uclouvain.be', config['user']['id'])
@@ -127,6 +129,10 @@ class Orthanc(unittest.TestCase):
         self.assertEqual('', config['lti_platform_keys_url'])
         self.assertEqual('', config['lti_platform_redirection_url'])
         self.assertEqual('', config['lti_platform_url'])
+
+        requests.put(URL + '/education/api/config/lti-client-id', json.dumps('client'), headers = AdministratorHeaders()).raise_for_status()
+        config = requests.get(URL + '/education/api/config', headers = AdministratorHeaders()).json()
+        self.assertEqual('client', config['lti_client_id'])
 
         config = requests.get(URL + '/education/api/config', headers = InstructorHeaders()).json()
         self.assertEqual('standard', config['user']['role'])
@@ -611,6 +617,21 @@ class Orthanc(unittest.TestCase):
 
 
     def test_link_unlink(self):
+        lst2 = requests.post(URL + '/education/api/list-images', json.dumps({
+            'project' : '_all-studies'
+        }), headers = AdministratorHeaders()).json()
+        self.assertEqual(0, len(lst2))
+
+        lst2 = requests.post(URL + '/education/api/list-images', json.dumps({
+            'project' : '_unused-studies'
+        }), headers = AdministratorHeaders()).json()
+        self.assertEqual(0, len(lst2))
+
+        lst2 = requests.post(URL + '/education/api/list-images', json.dumps({
+            'project' : '_unused-series'
+        }), headers = AdministratorHeaders()).json()
+        self.assertEqual(0, len(lst2))
+
         instance = self.create_test_instance_id()
         tags = requests.get(URL + '/instances/%s/tags?short' % instance, headers = AdministratorHeaders()).json()
         labels = requests.get(URL + '/instances/%s/labels' % instance, headers = AdministratorHeaders()).json()
@@ -624,6 +645,21 @@ class Orthanc(unittest.TestCase):
         lst = requests.get(URL + '/education/api/user-projects', headers = AdministratorHeaders()).json()
         self.assertEqual(1, len(lst['projects']))
         self.assertEqual(0, len(lst['projects'][project]['resources']))
+
+        lst2 = requests.post(URL + '/education/api/list-images', json.dumps({
+            'project' : '_all-studies'
+        }), headers = AdministratorHeaders()).json()
+        self.assertEqual(1, len(lst2))
+
+        lst2 = requests.post(URL + '/education/api/list-images', json.dumps({
+            'project' : '_unused-studies'
+        }), headers = AdministratorHeaders()).json()
+        self.assertEqual(1, len(lst2))
+
+        lst2 = requests.post(URL + '/education/api/list-images', json.dumps({
+            'project' : '_unused-series'
+        }), headers = AdministratorHeaders()).json()
+        self.assertEqual(1, len(lst2))
 
         body = {
             'resource' : {
@@ -649,6 +685,12 @@ class Orthanc(unittest.TestCase):
         self.assertEqual(tags['0020,000e'], resources[0]['series-instance-uid'])
         self.assertEqual(tags['0008,0018'], resources[0]['sop-instance-uid'])
         preview_url = resources[0]['preview_url']
+
+        lst2 = requests.post(URL + '/education/api/list-images', json.dumps({
+            'project' : project,
+        }), headers = AdministratorHeaders()).json()
+        self.assertEqual(1, len(lst2))
+        self.assertEqual(lst2[0], resources[0])
 
         labels = requests.get(URL + '/instances/%s/labels' % instance, headers = AdministratorHeaders()).json()
         self.assertEqual(1, len(labels))
@@ -696,6 +738,11 @@ class Orthanc(unittest.TestCase):
 
         labels = requests.get(URL + '/instances/%s/labels' % instance, headers = AdministratorHeaders()).json()
         self.assertEqual(0, len(labels))
+
+        lst = requests.post(URL + '/education/api/list-images', json.dumps({
+            'project' : project,
+        }), headers = AdministratorHeaders()).json()
+        self.assertEqual(0, len(lst))
 
 
 try:

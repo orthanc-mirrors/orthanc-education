@@ -564,7 +564,7 @@ namespace OrthancDatabase
 
   void ListAllStudies(Json::Value& target)
   {
-    target.clear();
+    target = Json::arrayValue;
     std::set<std::string> projects;
     ExecuteFind(target, Orthanc::ResourceType_Study, ProjectsConstraint_Ignored, projects);
   }
@@ -573,7 +573,7 @@ namespace OrthancDatabase
   void ListUnusedStudies(Json::Value& target,
                          const std::set<std::string>& allProjectIds)
   {
-    target.clear();
+    target = Json::arrayValue;
     ExecuteFind(target, Orthanc::ResourceType_Study, ProjectsConstraint_None, allProjectIds);
   }
 
@@ -606,7 +606,7 @@ namespace OrthancDatabase
     ExecuteFind(series, Orthanc::ResourceType_Series, ProjectsConstraint_None, allProjectIds);
 
     // Thirdly, merge the two lists by computing their intersection
-    target.clear();
+    target = Json::arrayValue;
     for (Json::Value::ArrayIndex i = 0; i < series.size(); i++)
     {
       const std::string studyInstanceUid = Orthanc::SerializationToolbox::ReadString(series[i], "study-instance-uid");
@@ -622,7 +622,7 @@ namespace OrthancDatabase
   void FindResourcesInProject(Json::Value& target,
                               const std::string& projectId)
   {
-    target.clear();
+    target = Json::arrayValue;
     ExecuteFindForProject(target, Orthanc::ResourceType_Study, projectId);
     ExecuteFindForProject(target, Orthanc::ResourceType_Series, projectId);
     ExecuteFindForProject(target, Orthanc::ResourceType_Instance, projectId);
