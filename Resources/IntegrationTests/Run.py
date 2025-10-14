@@ -24,11 +24,16 @@
 
 
 import argparse
+import base64
+import io
 import json
+import os
 import pprint
 import requests
 import sys
 import unittest
+
+from PIL import Image
 
 
 ##
@@ -159,7 +164,7 @@ class Orthanc(unittest.TestCase):
         self.assertEqual('education/app/login.html', path)
 
 
-    def test_login(self):
+    def test_login_html(self):
         path = requests.get(URL + '/education/app/login.html', headers = AdministratorHeaders(), allow_redirects=False).headers['Location']
         self.assertEqual('../../education/app/dashboard.html', path)
 
@@ -586,6 +591,112 @@ class Orthanc(unittest.TestCase):
         self.assertEqual(403, requests.put(URL + '/education/api/projects/%s/learners' % i, json.dumps([ 'a' ]), headers = InstructorHeaders()).status_code)
         self.assertEqual(403, requests.put(URL + '/education/api/projects/%s/lti-context-id' % i, json.dumps('context'), headers = InstructorHeaders()).status_code)
         self.assertEqual(403, requests.delete(URL + '/education/api/projects/%s/lti-context-id' % i, headers = InstructorHeaders()).status_code)
+
+
+    def create_test_instance_id(self):
+        with open(os.path.join(os.path.dirname(__file__), '..', 'Images', 'orthanc-h.png'), 'rb') as f:
+            content = f.read()
+
+        pixelData = base64.b64encode(content).decode('ascii')
+
+        return requests.post('http://localhost:8042/tools/create-dicom',
+                             json.dumps({
+                                 'Content' : 'data:image/png;base64,%s' % pixelData,
+                                 'Tags' : {
+                                     'PatientName' : 'TEST',
+                                     'StudyDescription' : 'MY^STUDY',
+                                 }
+                             }),
+                             headers = AdministratorHeaders()).json() ['ID']
+
+
+    def test_link_unlink(self):
+        instance = self.create_test_instance_id()
+        tags = requests.get(URL + '/instances/%s/tags?short' % instance, headers = AdministratorHeaders()).json()
+        labels = requests.get(URL + '/instances/%s/labels' % instance, headers = AdministratorHeaders()).json()
+        self.assertEqual(0, len(labels))
+
+        project = requests.post(URL + '/education/api/projects', json.dumps({
+            'name' : 'Hello',
+            'description' : 'World',
+        }), headers = AdministratorHeaders()).json() ['id']
+
+        lst = requests.get(URL + '/education/api/user-projects', headers = AdministratorHeaders()).json()
+        self.assertEqual(1, len(lst['projects']))
+        self.assertEqual(0, len(lst['projects'][project]['resources']))
+
+        body = {
+            'resource' : {
+                'resource-id' : instance,
+                'level' : 'Instance',
+            },
+            'project' : project,
+        }
+
+        self.assertEqual(403, requests.post(URL + '/education/api/link', json.dumps(body), headers = InstructorHeaders()).status_code)
+        self.assertEqual(403, requests.post(URL + '/education/api/link', json.dumps(body), headers = LearnerHeaders()).status_code)
+        self.assertEqual(403, requests.post(URL + '/education/api/link', json.dumps(body), headers = GuestHeaders()).status_code)
+        requests.post(URL + '/education/api/link', json.dumps(body), headers = AdministratorHeaders()).raise_for_status()
+
+        lst = requests.get(URL + '/education/api/user-projects', headers = AdministratorHeaders()).json()
+        resources = lst['projects'][project]['resources']
+        self.assertEqual(1, len(resources))
+        self.assertEqual('Instance', resources[0]['level'])
+        self.assertEqual(instance, resources[0]['resource-id'])
+        self.assertEqual('TEST - MY^STUDY', resources[0]['title'])
+        self.assertEqual([ project ], resources[0]['projects'])
+        self.assertEqual(tags['0020,000d'], resources[0]['study-instance-uid'])
+        self.assertEqual(tags['0020,000e'], resources[0]['series-instance-uid'])
+        self.assertEqual(tags['0008,0018'], resources[0]['sop-instance-uid'])
+        preview_url = resources[0]['preview_url']
+
+        labels = requests.get(URL + '/instances/%s/labels' % instance, headers = AdministratorHeaders()).json()
+        self.assertEqual(1, len(labels))
+        self.assertTrue('education-%s' % project in labels)
+
+        self.assertEqual(404, requests.get(URL + '/instances/%s/metadata/9520' % instance, headers = AdministratorHeaders()).status_code)
+
+        body['title'] = 'Hello'
+        requests.post(URL + '/education/api/change-title', json.dumps(body), headers = AdministratorHeaders()).raise_for_status()
+        lst = requests.get(URL + '/education/api/user-projects', headers = AdministratorHeaders()).json()
+        self.assertEqual('Hello', lst['projects'][project]['resources'][0]['title'])
+
+        metadata = requests.get(URL + '/instances/%s/metadata/9520' % instance, headers = AdministratorHeaders()).json()
+        self.assertEqual(1, len(metadata))
+        self.assertEqual('Hello', metadata['title'])
+
+        # "preview_url" is relative to "deep.html" and "list-projects.html"
+        self.assertEqual('../api/preview-instance/%s' % instance, preview_url)
+        preview = requests.get(URL + '/education/app/' + preview_url, headers = AdministratorHeaders())
+        self.assertEqual('image/jpeg', preview.headers['Content-Type'])
+        im = Image.open(io.BytesIO(preview.content))
+        self.assertEqual(128, im.size[0])
+        self.assertEqual(128, im.size[1])
+
+        metadata = requests.get(URL + '/instances/%s/metadata/9521' % instance, headers = AdministratorHeaders()).json()
+        self.assertEqual(2, len(metadata))
+        self.assertTrue('last-update' in metadata)
+        self.assertEqual(preview.content, base64.b64decode(metadata['jpeg']))
+
+        body = {
+            'resource' : {
+                'resource-id' : instance,
+                'level' : 'Instance',
+            },
+            'project' : project,
+        }
+
+        self.assertEqual(403, requests.post(URL + '/education/api/unlink', json.dumps(body), headers = InstructorHeaders()).status_code)
+        self.assertEqual(403, requests.post(URL + '/education/api/unlink', json.dumps(body), headers = LearnerHeaders()).status_code)
+        self.assertEqual(403, requests.post(URL + '/education/api/unlink', json.dumps(body), headers = GuestHeaders()).status_code)
+        requests.post(URL + '/education/api/unlink', json.dumps(body), headers = AdministratorHeaders()).raise_for_status()
+
+        lst = requests.get(URL + '/education/api/user-projects', headers = AdministratorHeaders()).json()
+        self.assertEqual(0, len(lst['projects'][project]['resources']))
+
+        labels = requests.get(URL + '/instances/%s/labels' % instance, headers = AdministratorHeaders()).json()
+        self.assertEqual(0, len(labels))
+
 
 try:
     print('\nStarting the tests...')

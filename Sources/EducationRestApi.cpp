@@ -750,7 +750,7 @@ void GeneratePreview(OrthancPluginRestOutput* output,
         throw Orthanc::OrthancException(Orthanc::ErrorCode_InternalError);
     }
 
-    OrthancPlugins::OrthancImage thumbnail(OrthancPluginPixelFormat_Grayscale8, THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT);
+    OrthancPlugins::OrthancImage thumbnail(OrthancPluginPixelFormat_RGB24, THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT);
     memset(thumbnail.GetBuffer(), 128, thumbnail.GetWidth() * thumbnail.GetHeight());
 
     if (success)
