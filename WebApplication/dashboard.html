@@ -59,7 +59,7 @@
             <button class="nav-link" id="pills-projects-tab" data-bs-toggle="pill" data-bs-target="#pills-projects" type="button" role="tab" aria-controls="pills-projects" aria-selected="false">Management of projects</button>
             <button class="nav-link" id="pills-images-tab" data-bs-toggle="pill" data-bs-target="#pills-images" type="button" role="tab" aria-controls="pills-images" aria-selected="false">Management of images</button>
             <button class="nav-link" id="pills-content-tab" data-bs-toggle="pill" data-bs-target="#pills-content" type="button" role="tab" aria-controls="pills-content" aria-selected="false">Content of projects</button>
-            <button class="nav-link" id="pills-upload-tab" data-bs-toggle="pill" data-bs-target="#pills-upload" type="button" role="tab" aria-controls="pills-upload" aria-selected="false">Upload whole-slide image</button>
+            <button class="nav-link" id="pills-dicomization-tab" data-bs-toggle="pill" data-bs-target="#pills-dicomization" type="button" role="tab" aria-controls="pills-dicomization" aria-selected="false">DICOM-ization of images</button>
             <button class="nav-link" id="pills-status-tab" data-bs-toggle="pill" data-bs-target="#pills-status" type="button" role="tab" aria-controls="pills-status" aria-selected="false">Upload status</button>
             <button class="nav-link" id="pills-settings-tab" data-bs-toggle="pill" data-bs-target="#pills-settings" type="button" role="tab" aria-controls="pills-settings" aria-selected="false">Settings</button>
           </ul>
@@ -195,8 +195,8 @@
                         <div class="col-sm-8">
                           <select class="form-select" id="selectedProjectForImages" v-model="projectIdForImages" >
                             <option value="_unused-studies" selected>[ DICOM studies without a project ]</option>
-                            <option value="_unused-series" selected>[ DICOM series without a project ]</option>
-                            <option value="_all-studies" selected>[ All DICOM studies ]</option>
+                            <option value="_unused-series">[ DICOM series without a project ]</option>
+                            <option value="_all-studies">[ All DICOM studies ]</option>
                             <option v-for="project in projects" :value="project.id">{{project.name}}</option>
                           </select>
                         </div>
@@ -410,12 +410,45 @@
               </div>
 
 
-              <div class="tab-pane" id="pills-upload" role="tabpanel" aria-labelledby="pills-upload-tab" tabindex="0">
-                <h1>Upload whole-slide image</h1>
+              <div class="tab-pane" id="pills-dicomization" role="tabpanel" aria-labelledby="pills-dicomization-tab" tabindex="0">
+                <h1>DICOM-ization of images</h1>
                 <p>&nbsp;</p>
 
                 <div class="row justify-content-center">
                   <div class="col-8">
+                    <form action="javascript:void(0);">
+                      <div class="row mb-3">
+                        <label for="dicomizationType" class="col-sm-4 col-form-label">Type of DICOM-ization:</label>
+                        <div class="col-sm-8">
+                          <select class="form-select" id="dicomizationType" v-model="dicomizationType" >
+                            <option value="wsi">Whole-slide imaging</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div class="mb-3" v-if="isUploadAvailable">
+                        <label for="dicomizationFile" class="form-label">File to upload:</label>
+                        <input class="form-control" type="file" id="dicomizationFile">
+                      </div>
+                      <div class="mb-3" v-if="isDicomizationWSI">
+                        <label for="dicomizationColor" class="form-label">Background color:&nbsp;&nbsp;</label>
+                        <select id="dicomizationColor" class="form-select">
+                          <option value="white">White</option>
+                          <option value="black">Black</option>
+                        </select>
+                      </div>
+                      <div class="mb-3" v-if="isDicomizationWSI">
+                        <input class="form-check-input" type="checkbox" id="dicomizationOpenSlide">&nbsp;&nbsp;
+                        <label for="dicomizationOpenSlide" class="form-label">Force OpenSlide (slower, if import does not succeed)</label>
+                      </div>
+                      <div class="mb-3" v-if="isDicomizationWSI">
+                        <input class="form-check-input" type="checkbox" id="dicomizationPyramid" checked>&nbsp;&nbsp;
+                        <label for="dicomizationPyramid" class="form-label">Reconstruct pyramid (better, but may result in larger files)</label>
+                      </div>
+                      <p v-if="isUploadAvailable">
+                        <button v-if="!uploading" type="button" class="btn btn-lg btn-primary" @click="upload()">Upload</button>
+                        <button v-if="uploading" type="button" class="btn btn-lg btn-primary" disabled>Uploading: {{uploadProgress}} MB / {{uploadSize}} MB</button>
+                      </p>
+                    </form>
                   </div>
                 </div>
               </div>

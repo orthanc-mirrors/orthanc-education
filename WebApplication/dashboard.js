@@ -61,6 +61,10 @@ var app = new Vue({
 
       editProjectsSwitch: false,
       editImagesSwitch: false,
+      dicomizationType: 'wsi',
+      uploading: false,
+      uploadProgress: 0,
+      uploadSize: 0,
 
       configLtiClientId: '',
 
@@ -77,6 +81,14 @@ var app = new Vue({
 
     projectViewers() {
       return this.projectForContent.secondary_viewers || '';
+    },
+
+    isUploadAvailable() {
+      return (this.dicomizationType == 'wsi');
+    },
+
+    isDicomizationWSI() {
+      return (this.dicomizationType == 'wsi');
     }
   },
 
@@ -485,6 +497,69 @@ var app = new Vue({
         }
         this.modalLinkImageWithProject.show();
       }
+    },
+
+    upload: function() {
+      var file = document.getElementById('dicomizationFile').files[0];
+      if (!file) {
+        alert('Please select a file first.');
+        return;
+      }
+
+      var chunkSize = 1 * 1024 * 1024; // 1 MB
+      var totalChunks = Math.ceil(file.size / chunkSize);
+      var uploadId = crypto.randomUUID();
+
+      this.uploading = true;
+      this.uploadProgress = 0;
+      this.uploadSize = Math.round(file.size / (1024 * 1024));
+
+      var that = this;
+
+      function uploadChunk(currentChunk) {
+        if (currentChunk >= totalChunks) {
+          console.log('All chunks uploaded successfully!');
+
+          axios.post('../api/dicomization', {
+            upload_id: uploadId
+          })
+            .then(function(res) {
+              that.uploading = false;
+              console.log('Upload is now being DICOM-ized');
+            })
+            .catch(function(a) {
+              that.uploading = false;
+              alert('Upload has failed');
+            });
+
+        } else {
+
+          var start = currentChunk * chunkSize;
+          var end = Math.min(file.size, start + chunkSize);
+          var chunk = file.slice(start, end);
+
+          that.uploadProgress = Math.round(start / (1024 * 1024));
+
+          console.log('Uploading chunk ' + (currentChunk + 1) + ' of ' + totalChunks + '...');
+
+          axios.post('../api/upload', chunk, {
+            headers: {
+              'Content-Range': 'bytes ' + start + '-' + (end - 1) + '/' + file.size,
+              'Upload-Id': uploadId,
+              'Content-Type': 'application/octet-stream'
+            }
+          })
+            .then(function(res) {
+              uploadChunk(currentChunk + 1);
+            })
+            .catch(function() {
+              that.uploading = false;
+              alert('Upload has failed');
+            });
+        }
+      }
+
+      uploadChunk(0);
     }
   }
 });

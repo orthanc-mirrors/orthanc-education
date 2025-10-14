@@ -35,9 +35,13 @@
 #include <MultiThreading/Semaphore.h>
 #include <SerializationToolbox.h>
 #include <SystemToolbox.h>
+#include <TemporaryFile.h>
 
 #include <boost/algorithm/string/predicate.hpp>
+#include <boost/iostreams/device/file_descriptor.hpp>
+#include <boost/iostreams/stream.hpp>
 #include <boost/math/special_functions/round.hpp>
+#include <boost/regex.hpp>
 #include <cassert>
 
 
@@ -1188,6 +1192,229 @@ void SetLtiClientId(OrthancPluginRestOutput* output,
 }
 
 
+class ActiveUpload : public boost::noncopyable
+{
+private:
+  Orthanc::TemporaryFile  file_;
+  uint64_t                pos_;
+  uint64_t                fileSize_;
+
+public:
+  ActiveUpload(uint64_t fileSize) :
+    pos_(0),
+    fileSize_(fileSize)
+  {
+  }
+
+  uint64_t GetFileSize() const
+  {
+    return fileSize_;
+  }
+
+  bool WriteChunk(size_t start,
+                  const void* data,
+                  size_t size)
+  {
+    if (pos_ != start ||
+        pos_ + size > fileSize_)
+    {
+      return false;
+    }
+    else if (size == 0)
+    {
+      return true;
+    }
+    else
+    {
+      try
+      {
+        boost::iostreams::stream<boost::iostreams::file_descriptor_sink> f;
+
+        f.open(file_.GetPath(), std::ofstream::out | std::ofstream::binary | std::ofstream::app);
+        if (!f.good())
+        {
+          return false;
+        }
+
+        f.write(reinterpret_cast<const char*>(data), size);
+
+        bool good = f.good();
+        f.close();
+
+        if (good)
+        {
+          pos_ += static_cast<uint64_t>(size);
+          return true;
+        }
+        else
+        {
+          return false;
+        }
+      }
+      catch (boost::filesystem::filesystem_error&)
+      {
+      }
+      catch (...)  // To catch "std::system_error&" in C++11
+      {
+      }
+
+      return false;
+    }
+  }
+};
+
+
+class ActiveUploads : public boost::noncopyable
+{
+private:
+  typedef std::map<std::string, ActiveUpload*>  Content;
+
+  boost::mutex   mutex_;
+  Content        content_;
+
+public:
+  static ActiveUploads& GetInstance()
+  {
+    static ActiveUploads instance;
+    return instance;
+  }
+
+  ~ActiveUploads()
+  {
+    Clear();
+  }
+
+  void Clear()
+  {
+    boost::mutex::scoped_lock lock(mutex_);
+
+    for (Content::iterator it = content_.begin(); it != content_.end(); ++it)
+    {
+      assert(it->second != NULL);
+      delete it->second;
+    }
+
+    content_.clear();
+  }
+
+  class Accessor : public boost::noncopyable
+  {
+  private:
+    boost::mutex::scoped_lock lock_;
+    ActiveUploads&            uploads_;
+    std::string               key_;
+    ActiveUpload*             upload_;
+
+    void Erase()
+    {
+      Content::iterator found = uploads_.content_.find(key_);
+      assert(found != uploads_.content_.end());
+      assert(found->second != NULL);
+      delete found->second;
+      uploads_.content_.erase(key_);
+    }
+
+  public:
+    Accessor(ActiveUploads& uploads,
+             const std::string& key,
+             uint64_t fileSize) :
+      lock_(uploads.mutex_),
+      uploads_(uploads),
+      key_(key)
+    {
+      Content::iterator found = uploads.content_.find(key);
+      if (found == uploads.content_.end())
+      {
+        upload_ = new ActiveUpload(fileSize);
+        uploads.content_[key] = upload_;
+      }
+      else if (found->second->GetFileSize() != fileSize)
+      {
+        Erase();
+        throw Orthanc::OrthancException(Orthanc::ErrorCode_NetworkProtocol, "Mismatch in upload size");
+      }
+      else
+      {
+        upload_ = found->second;
+      }
+    }
+
+    void WriteChunk(size_t start,
+                    size_t end,
+                    const void* data,
+                    size_t size)
+    {
+      if (start > end ||
+          end - start + 1 != size ||
+          !upload_->WriteChunk(start, data, size))
+      {
+        Erase();
+        throw Orthanc::OrthancException(Orthanc::ErrorCode_NetworkProtocol, "Mismatch in uploaded chunk");
+      }
+    }
+  };
+};
+
+
+void UploadFile(OrthancPluginRestOutput* output,
+                const std::string& url,
+                const OrthancPluginHttpRequest* request,
+                const AuthenticatedUser& user)
+{
+  assert(user.GetRole() == Role_Administrator);
+
+  if (request->method != OrthancPluginHttpMethod_Post)
+  {
+    OrthancPluginSendMethodNotAllowed(OrthancPlugins::GetGlobalContext(), output, "POST");
+  }
+  else
+  {
+    std::map<std::string, std::string> headers;
+    HttpToolbox::ConvertDictionaryFromC(headers, true, request->headersCount, request->headersKeys, request->headersValues);
+
+    std::string key, range;
+    if (HttpToolbox::LookupHttpHeader(key, headers, "upload-id") &&
+        HttpToolbox::LookupHttpHeader(range, headers, "content-range"))
+    {
+      boost::regex pattern("bytes ([0-9]+)-([0-9]+)/([0-9]+)");
+      boost::smatch what;
+
+      uint64_t start, end, fileSize;
+      if (!regex_match(range, what, pattern) ||
+          !Orthanc::SerializationToolbox::ParseUnsignedInteger64(start, what[1]) ||
+          !Orthanc::SerializationToolbox::ParseUnsignedInteger64(end, what[2]) ||
+          !Orthanc::SerializationToolbox::ParseUnsignedInteger64(fileSize, what[3]))
+      {
+        throw Orthanc::OrthancException(Orthanc::ErrorCode_BadRequest);
+      }
+
+      ActiveUploads::Accessor accessor(ActiveUploads::GetInstance(), key, fileSize);
+      accessor.WriteChunk(start, end, request->body, request->bodySize);
+      HttpToolbox::AnswerText(output, "");
+    }
+    else
+    {
+      throw Orthanc::OrthancException(Orthanc::ErrorCode_BadRequest);
+    }
+  }
+}
+
+
+void Dicomization(OrthancPluginRestOutput* output,
+                  const std::string& url,
+                  const OrthancPluginHttpRequest* request,
+                  const AuthenticatedUser& user,
+                  const Json::Value& body)
+{
+  assert(user.GetRole() == Role_Administrator);
+
+  std::cout << body.toStyledString();
+
+  HttpToolbox::AnswerText(output, "");
+}
+
+
+
 void RegisterEducationRestApiRoutes()
 {
   /**
@@ -1236,6 +1463,9 @@ void RegisterEducationRestApiRoutes()
   RestApiRouter::RegisterAdministratorRoute<HandleProjectsConfiguration>("/education/api/projects");
   RestApiRouter::RegisterAdministratorRoute<HandleSingleProject>("/education/api/projects/{}");
   RestApiRouter::RegisterAdministratorRoute<SetLtiClientId>("/education/api/config/lti-client-id");
+
+  RestApiRouter::RegisterAdministratorRoute<UploadFile>("/education/api/upload");
+  RestApiRouter::RegisterAdministratorPostRoute<Dicomization>("/education/api/dicomization");
 }
 
 
