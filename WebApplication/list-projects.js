@@ -27,7 +27,7 @@ var app = new Vue({
   data() {
     return {
       config: {},
-      user: {},
+      username: '',
       projects: [],
       selectedProjectId: '',
       selectedViewer: '',
@@ -41,14 +41,6 @@ var app = new Vue({
   },
 
   computed: {
-    username() {
-      if (this.user !== undefined) {
-        return this.user.id;
-      } else {
-        return '';
-      }
-    },
-
     projectDescription() {
       var project = this.projects[this.selectedProjectId];
       if (project !== undefined) {
@@ -125,7 +117,6 @@ var app = new Vue({
       axios.get('../api/user-projects')
         .then(function(res) {
           that.projects = res.data.projects;
-          that.user = res.data.user;
 
           var project = that.projects[that.selectedProjectId];
           if (project !== undefined) {
@@ -218,6 +209,7 @@ var app = new Vue({
       .get('../api/config')
       .then(function(response) {
         that.config = response.data;
+        that.username = response.data.user.id || 'Guest';
       });
 
     document.getElementById('modalProjectParameters').addEventListener('hidden.bs.modal', function (event) {

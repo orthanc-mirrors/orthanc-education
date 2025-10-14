@@ -159,6 +159,21 @@ class Orthanc(unittest.TestCase):
         self.assertEqual('education/app/login.html', path)
 
 
+    def test_login(self):
+        path = requests.get(URL + '/education/app/login.html', headers = AdministratorHeaders(), allow_redirects=False).headers['Location']
+        self.assertEqual('../../education/app/dashboard.html', path)
+
+        path = requests.get(URL + '/education/app/login.html', headers = InstructorHeaders(), allow_redirects=False).headers['Location']
+        self.assertEqual('../../education/app/list-projects.html', path)
+
+        path = requests.get(URL + '/education/app/login.html', headers = LearnerHeaders(), allow_redirects=False).headers['Location']
+        self.assertEqual('../../education/app/list-projects.html', path)
+
+        r = requests.get(URL + '/education/app/login.html', headers = GuestHeaders(), allow_redirects=False)
+        self.assertFalse('Location' in r.headers)
+        self.assertEqual('text/html', r.headers['Content-Type'])
+
+
     def test_logout(self):
         for headers in AnyUserHeaders():
             session = requests.session()
@@ -306,11 +321,12 @@ class Orthanc(unittest.TestCase):
         ]:
             self.assertEqual(403, requests.post(URL + '/education/api/projects', json.dumps(body), headers = headers).status_code)
 
-        r = requests.post(URL + '/education/api/projects', json.dumps(body), headers = AdministratorHeaders())
-        self.assertEqual(0, len(r.content))
+        r = requests.post(URL + '/education/api/projects', json.dumps(body), headers = AdministratorHeaders()).json()
+        self.assertEqual(1, len(r))
 
         projects = requests.get(URL + '/education/api/projects', headers = AdministratorHeaders()).json()
         self.assertEqual(1, len(projects))
+        self.assertEqual(r['id'], projects[0]['id'])
 
         self.assertEqual('Hello', projects[0]['name'])
         self.assertEqual('World', projects[0]['description'])
@@ -341,6 +357,110 @@ class Orthanc(unittest.TestCase):
 
         projects = requests.get(URL + '/education/api/projects', headers = AdministratorHeaders()).json()
         self.assertEqual(0, len(projects))
+
+
+    def test_list_user_projects(self):
+        def CheckCountProjects(countAdministrator, roleAdministrator,
+                               countInstructor, roleInstructor,
+                               countLearner, roleLearner,
+                               countGuest, roleGuest):
+            for i in [
+                    (AdministratorHeaders(), countAdministrator, roleAdministrator),
+                    (InstructorHeaders(), countInstructor, roleInstructor),
+                    (LearnerHeaders(), countLearner, roleLearner),
+                    (GuestHeaders(), countGuest, roleGuest),
+            ]:
+                lst = requests.get(URL + '/education/api/user-projects', headers = i[0]).json()
+                self.assertEqual(1, len(lst))
+                self.assertEqual(i[1], len(lst['projects']))
+                keys = list(lst['projects'].keys())
+                assert(len(keys) <= 1)
+                if len(keys) == 1:
+                    self.assertEqual(i[2], lst['projects'][keys[0]]['role'])
+
+        CheckCountProjects(0, '', 0, '', 0, '', 0, '')
+
+        project = requests.post(URL + '/education/api/projects', json.dumps({
+            'name' : 'Hello',
+            'description' : 'World'
+        }), headers = AdministratorHeaders()).json() ['id']
+
+        lst = requests.get(URL + '/education/api/user-projects', headers = AdministratorHeaders()).json()
+        self.assertEqual(1, len(lst['projects']))
+        self.assertTrue(project in lst['projects'])
+        self.assertEqual('Hello', lst['projects'][project]['name'])
+        self.assertEqual('World', lst['projects'][project]['description'])
+        self.assertEqual('hidden', lst['projects'][project]['policy'])
+        self.assertEqual('stone', lst['projects'][project]['primary_viewer'])
+        self.assertEqual(0, len(lst['projects'][project]['resources']))
+        self.assertEqual('instructor', lst['projects'][project]['role'])
+        self.assertEqual(1, len(lst['projects'][project]['secondary_viewers']))
+        self.assertEqual('stone', lst['projects'][project]['secondary_viewers'][0]['id'])
+
+        projects = requests.get(URL + '/education/api/projects', headers = AdministratorHeaders()).json()
+        self.assertEqual(projects[0]['id'], project)
+
+        CheckCountProjects(1, 'instructor', 0, '', 0, '', 0, '')
+
+        requests.put(URL + '/education/api/projects/%s/policy' % project, json.dumps('hidden'),
+                     headers = AdministratorHeaders()).raise_for_status()
+        CheckCountProjects(1, 'instructor', 0, '', 0, '', 0, '')
+
+        requests.put(URL + '/education/api/projects/%s/instructors' % project, json.dumps([ 'instructor@uclouvain.be' ]),
+                     headers = AdministratorHeaders()).raise_for_status()
+        CheckCountProjects(1, 'instructor', 1, 'instructor', 0, '', 0, '')
+
+        requests.put(URL + '/education/api/projects/%s/instructors' % project, json.dumps([ ]),
+                     headers = AdministratorHeaders()).raise_for_status()
+        CheckCountProjects(1, 'instructor', 0, '', 0, '', 0, '')
+
+        requests.put(URL + '/education/api/projects/%s/learners' % project, json.dumps([ 'learner@uclouvain.be' ]),
+                     headers = AdministratorHeaders()).raise_for_status()
+        CheckCountProjects(1, 'instructor', 0, '', 0, '', 0, '')
+
+        requests.put(URL + '/education/api/projects/%s/learners' % project, json.dumps([ ]),
+                     headers = AdministratorHeaders()).raise_for_status()
+        CheckCountProjects(1, 'instructor', 0, '', 0, '', 0, '')
+
+        requests.put(URL + '/education/api/projects/%s/policy' % project, json.dumps('active'),
+                     headers = AdministratorHeaders()).raise_for_status()
+        CheckCountProjects(1, 'instructor', 0, '', 0, '', 0, '')
+
+        requests.put(URL + '/education/api/projects/%s/instructors' % project, json.dumps([ 'instructor@uclouvain.be' ]),
+                     headers = AdministratorHeaders()).raise_for_status()
+        CheckCountProjects(1, 'instructor', 1, 'instructor', 0, '', 0, '')
+
+        requests.put(URL + '/education/api/projects/%s/instructors' % project, json.dumps([ ]),
+                     headers = AdministratorHeaders()).raise_for_status()
+        CheckCountProjects(1, 'instructor', 0, '', 0, '', 0, '')
+
+        requests.put(URL + '/education/api/projects/%s/learners' % project, json.dumps([ 'learner@uclouvain.be' ]),
+                     headers = AdministratorHeaders()).raise_for_status()
+        CheckCountProjects(1, 'instructor', 0, '', 1, 'learner', 0, '')
+
+        requests.put(URL + '/education/api/projects/%s/learners' % project, json.dumps([ ]),
+                     headers = AdministratorHeaders()).raise_for_status()
+        CheckCountProjects(1, 'instructor', 0, '', 0, '', 0, '')
+
+        requests.put(URL + '/education/api/projects/%s/policy' % project, json.dumps('public'),
+                     headers = AdministratorHeaders()).raise_for_status()
+        CheckCountProjects(1, 'instructor', 1, 'learner', 1, 'learner', 1, 'learner')
+
+        requests.put(URL + '/education/api/projects/%s/instructors' % project, json.dumps([ 'instructor@uclouvain.be' ]),
+                     headers = AdministratorHeaders()).raise_for_status()
+        CheckCountProjects(1, 'instructor', 1, 'instructor', 1, 'learner', 1, 'learner')
+
+        requests.put(URL + '/education/api/projects/%s/instructors' % project, json.dumps([ ]),
+                     headers = AdministratorHeaders()).raise_for_status()
+        CheckCountProjects(1, 'instructor', 1, 'learner', 1, 'learner', 1, 'learner')
+
+        requests.put(URL + '/education/api/projects/%s/learners' % project, json.dumps([ 'learner@uclouvain.be' ]),
+                     headers = AdministratorHeaders()).raise_for_status()
+        CheckCountProjects(1, 'instructor', 1, 'learner', 1, 'learner', 1, 'learner')
+
+        requests.put(URL + '/education/api/projects/%s/learners' % project, json.dumps([ ]),
+                     headers = AdministratorHeaders()).raise_for_status()
+        CheckCountProjects(1, 'instructor', 1, 'learner', 1, 'learner', 1, 'learner')
 
 
 try:

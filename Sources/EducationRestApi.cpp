@@ -200,12 +200,6 @@ void GetUserProjects(OrthancPluginRestOutput* output,
                      const OrthancPluginHttpRequest* request,
                      const AuthenticatedUser& user)
 {
-  if (user.GetRole() != Role_Administrator &&
-      user.GetRole() != Role_Standard)
-  {
-    throw Orthanc::OrthancException(Orthanc::ErrorCode_ForbiddenAccess);
-  }
-
   // List all the projects
   Json::Value projects = Json::objectValue;
 
@@ -239,7 +233,6 @@ void GetUserProjects(OrthancPluginRestOutput* output,
   }
 
   Json::Value answer = Json::objectValue;
-  user.Serialize(answer["user"]);
   answer["projects"] = projects;
 
   HttpToolbox::AnswerJson(output, answer);
@@ -1117,7 +1110,10 @@ void HandleProjectsConfiguration(OrthancPluginRestOutput* output,
 
       const std::string key = EducationConfiguration::GetInstance().GenerateProjectId();
       ProjectPermissionContext::GetProjects().Store(key, project.release());
-      HttpToolbox::AnswerText(output, "");
+
+      Json::Value answer;
+      answer["id"] = key;
+      HttpToolbox::AnswerJson(output, answer);
     }
   }
   else
@@ -1261,4 +1257,3 @@ AuthenticatedUser* AuthenticateFromEducationCookie(const std::list<HttpToolbox::
 
   return NULL;
 }
-
