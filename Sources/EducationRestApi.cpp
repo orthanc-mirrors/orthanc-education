@@ -363,7 +363,7 @@ void ChangeProjectParameter(OrthancPluginRestOutput* output,
   if (user.GetRole() != Role_Administrator &&
       property != "policy" &&
       property != "primary-viewer" &&
-      property != "secondary-viewer")
+      property != "secondary-viewers")
   {
     // Other properties can only be changed by the administrator
     throw Orthanc::OrthancException(Orthanc::ErrorCode_ForbiddenAccess);

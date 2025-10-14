@@ -100,10 +100,10 @@ def AnyUserHeaders():
 class Orthanc(unittest.TestCase):
     def setUp(self):
         for patient in requests.get(URL + '/patients', headers = AdministratorHeaders()).json():
-            requests.delete(URL + '/patients/%s' % patient, headers = AdministratorHeaders())
+            requests.delete(URL + '/patients/%s' % patient, headers = AdministratorHeaders()).raise_for_status()
 
         for project in requests.get(URL + '/education/api/projects', headers = AdministratorHeaders()).json():
-            requests.delete(URL + '/education/api/projects/%s' % project['id'], headers = AdministratorHeaders())
+            requests.delete(URL + '/education/api/projects/%s' % project['id'], headers = AdministratorHeaders()).raise_for_status()
 
 
     def test_config(self):
@@ -353,7 +353,7 @@ class Orthanc(unittest.TestCase):
         ]:
             self.assertEqual(403, requests.delete(URL + '/education/api/projects/%s' % projects[0]['id'], headers = headers).status_code)
 
-        requests.delete(URL + '/education/api/projects/%s' % projects[0]['id'], headers = AdministratorHeaders())
+        requests.delete(URL + '/education/api/projects/%s' % projects[0]['id'], headers = AdministratorHeaders()).raise_for_status()
 
         projects = requests.get(URL + '/education/api/projects', headers = AdministratorHeaders()).json()
         self.assertEqual(0, len(projects))
@@ -462,6 +462,130 @@ class Orthanc(unittest.TestCase):
                      headers = AdministratorHeaders()).raise_for_status()
         CheckCountProjects(1, 'instructor', 1, 'learner', 1, 'learner', 1, 'learner')
 
+
+    def test_change_project_parameter(self):
+        i = requests.post(URL + '/education/api/projects', json.dumps({
+            'name' : 'Hello',
+            'description' : 'World'
+        }), headers = AdministratorHeaders()).json() ['id']
+
+        project = requests.get(URL + '/education/api/projects/%s' % i, headers = AdministratorHeaders()).json()
+        self.assertEqual(8, len(project))
+        self.assertEqual('Hello', project['name'])
+        self.assertEqual('World', project['description'])
+        self.assertEqual(i, project['id'])
+        self.assertEqual(0, len(project['instructors']))
+        self.assertEqual(0, len(project['learners']))
+        self.assertEqual('hidden', project['policy'])
+        self.assertEqual('stone', project['primary_viewer'])
+        self.assertEqual(0, len(project['secondary_viewers']))
+        self.assertFalse('lti-context-id' in project)
+
+        ## The parameters below can only be changed by the administrator, as long as no instructor is associated with the project
+
+        self.assertEqual(403, requests.put(URL + '/education/api/projects/%s/learners' % i, json.dumps([ 'a' ]), headers = InstructorHeaders()).status_code)
+        self.assertEqual(403, requests.put(URL + '/education/api/projects/%s/learners' % i, json.dumps([ 'a' ]), headers = LearnerHeaders()).status_code)
+        self.assertEqual(403, requests.put(URL + '/education/api/projects/%s/learners' % i, json.dumps([ 'a' ]), headers = GuestHeaders()).status_code)
+        requests.put(URL + '/education/api/projects/%s/learners' % i, json.dumps([ 'c', 'learner@uclouvain.be' ]), headers = AdministratorHeaders()).raise_for_status()
+        project = requests.get(URL + '/education/api/projects/%s' % i, headers = AdministratorHeaders()).json()
+        v = project['learners']
+        self.assertEqual(2, len(v))
+        self.assertTrue('c' in v)
+        self.assertTrue('learner@uclouvain.be' in v)
+
+        self.assertEqual(403, requests.put(URL + '/education/api/projects/%s/name' % i, json.dumps('Nope'), headers = InstructorHeaders()).status_code)
+        self.assertEqual(403, requests.put(URL + '/education/api/projects/%s/name' % i, json.dumps('Nope'), headers = LearnerHeaders()).status_code)
+        self.assertEqual(403, requests.put(URL + '/education/api/projects/%s/name' % i, json.dumps('Nope'), headers = GuestHeaders()).status_code)
+        requests.put(URL + '/education/api/projects/%s/name' % i, json.dumps('New name'), headers = AdministratorHeaders()).raise_for_status()
+        project = requests.get(URL + '/education/api/projects/%s' % i, headers = AdministratorHeaders()).json()
+        self.assertEqual('New name', project['name'])
+
+        self.assertEqual(403, requests.put(URL + '/education/api/projects/%s/description' % i, json.dumps('Nope'), headers = InstructorHeaders()).status_code)
+        self.assertEqual(403, requests.put(URL + '/education/api/projects/%s/description' % i, json.dumps('Nope'), headers = LearnerHeaders()).status_code)
+        self.assertEqual(403, requests.put(URL + '/education/api/projects/%s/description' % i, json.dumps('Nope'), headers = GuestHeaders()).status_code)
+        requests.put(URL + '/education/api/projects/%s/description' % i, json.dumps('New description'), headers = AdministratorHeaders()).raise_for_status()
+        project = requests.get(URL + '/education/api/projects/%s' % i, headers = AdministratorHeaders()).json()
+        self.assertEqual('New description', project['description'])
+
+        self.assertEqual(403, requests.put(URL + '/education/api/projects/%s/policy' % i, json.dumps('active'), headers = InstructorHeaders()).status_code)
+        self.assertEqual(403, requests.put(URL + '/education/api/projects/%s/policy' % i, json.dumps('active'), headers = LearnerHeaders()).status_code)
+        self.assertEqual(403, requests.put(URL + '/education/api/projects/%s/policy' % i, json.dumps('active'), headers = GuestHeaders()).status_code)
+        requests.put(URL + '/education/api/projects/%s/policy' % i, json.dumps('active'), headers = AdministratorHeaders()).raise_for_status()
+        project = requests.get(URL + '/education/api/projects/%s' % i, headers = AdministratorHeaders()).json()
+        self.assertEqual('active', project['policy'])
+
+        for viewer in [ 'stone', 'volview', 'wsi', 'ohif-basic', 'ohif-volume', 'ohif-tumor', 'ohif-segmentation' ]:
+            self.assertEqual(403, requests.put(URL + '/education/api/projects/%s/primary-viewer' % i, json.dumps(viewer), headers = InstructorHeaders()).status_code)
+            self.assertEqual(403, requests.put(URL + '/education/api/projects/%s/primary-viewer' % i, json.dumps(viewer), headers = LearnerHeaders()).status_code)
+            self.assertEqual(403, requests.put(URL + '/education/api/projects/%s/primary-viewer' % i, json.dumps(viewer), headers = GuestHeaders()).status_code)
+
+            requests.put(URL + '/education/api/projects/%s/primary-viewer' % i, json.dumps(viewer), headers = AdministratorHeaders()).raise_for_status()
+
+            project = requests.get(URL + '/education/api/projects/%s' % i, headers = AdministratorHeaders()).json()
+            self.assertEqual(viewer, project['primary_viewer'])
+
+        self.assertEqual(403, requests.put(URL + '/education/api/projects/%s/secondary-viewers' % i, json.dumps([ 'wsi', 'ohif-basic' ]), headers = InstructorHeaders()).status_code)
+        self.assertEqual(403, requests.put(URL + '/education/api/projects/%s/secondary-viewers' % i, json.dumps([ 'wsi', 'ohif-basic' ]), headers = LearnerHeaders()).status_code)
+        self.assertEqual(403, requests.put(URL + '/education/api/projects/%s/secondary-viewers' % i, json.dumps([ 'wsi', 'ohif-basic' ]), headers = GuestHeaders()).status_code)
+        requests.put(URL + '/education/api/projects/%s/secondary-viewers' % i, json.dumps([ 'wsi', 'ohif-basic' ]), headers = AdministratorHeaders()).raise_for_status()
+        project = requests.get(URL + '/education/api/projects/%s' % i, headers = AdministratorHeaders()).json()
+        v = list(map(lambda x: x['id'], project['secondary_viewers']))
+        self.assertEqual(2, len(v))
+        self.assertTrue('wsi' in v)
+        self.assertTrue('ohif-basic' in v)
+
+        self.assertEqual(403, requests.put(URL + '/education/api/projects/%s/lti-context-id' % i, json.dumps('context'), headers = InstructorHeaders()).status_code)
+        self.assertEqual(403, requests.put(URL + '/education/api/projects/%s/lti-context-id' % i, json.dumps('context'), headers = LearnerHeaders()).status_code)
+        self.assertEqual(403, requests.put(URL + '/education/api/projects/%s/lti-context-id' % i, json.dumps('context'), headers = GuestHeaders()).status_code)
+        requests.put(URL + '/education/api/projects/%s/lti-context-id' % i, json.dumps('context'), headers = AdministratorHeaders()).raise_for_status()
+        project = requests.get(URL + '/education/api/projects/%s' % i, headers = AdministratorHeaders()).json()
+        self.assertEqual(9, len(project))
+        self.assertEqual('context', project['lti_context_id'])
+
+        self.assertEqual(403, requests.delete(URL + '/education/api/projects/%s/lti-context-id' % i, headers = InstructorHeaders()).status_code)
+        self.assertEqual(403, requests.delete(URL + '/education/api/projects/%s/lti-context-id' % i, headers = LearnerHeaders()).status_code)
+        self.assertEqual(403, requests.delete(URL + '/education/api/projects/%s/lti-context-id' % i, headers = GuestHeaders()).status_code)
+        requests.delete(URL + '/education/api/projects/%s/lti-context-id' % i, headers = AdministratorHeaders()).raise_for_status()
+        project = requests.get(URL + '/education/api/projects/%s' % i, headers = AdministratorHeaders()).json()
+        self.assertEqual(8, len(project))
+        self.assertFalse('lti-context-id' in project)
+
+        ## Associate the instructor with the project
+
+        self.assertEqual(403, requests.put(URL + '/education/api/projects/%s/instructors' % i, json.dumps([ 'a', 'instructor@uclouvain.be' ]), headers = InstructorHeaders()).status_code)
+        self.assertEqual(403, requests.put(URL + '/education/api/projects/%s/instructors' % i, json.dumps([ 'a', 'instructor@uclouvain.be' ]), headers = LearnerHeaders()).status_code)
+        self.assertEqual(403, requests.put(URL + '/education/api/projects/%s/instructors' % i, json.dumps([ 'a', 'instructor@uclouvain.be' ]), headers = GuestHeaders()).status_code)
+        requests.put(URL + '/education/api/projects/%s/instructors' % i, json.dumps([ 'a', 'instructor@uclouvain.be' ]), headers = AdministratorHeaders()).raise_for_status()
+        project = requests.get(URL + '/education/api/projects/%s' % i, headers = AdministratorHeaders()).json()
+        v = project['instructors']
+        self.assertEqual(2, len(v))
+        self.assertTrue('a' in v)
+        self.assertTrue('instructor@uclouvain.be' in v)
+
+        ## The parameters below can also be changed by the instructors (the same tests failed above)
+
+        requests.put(URL + '/education/api/projects/%s/policy' % i, json.dumps('public'), headers = InstructorHeaders()).raise_for_status()
+        project = requests.get(URL + '/education/api/projects/%s' % i, headers = AdministratorHeaders()).json()
+        self.assertEqual('public', project['policy'])
+
+        requests.put(URL + '/education/api/projects/%s/primary-viewer' % i, json.dumps('wsi'), headers = InstructorHeaders()).raise_for_status()
+        project = requests.get(URL + '/education/api/projects/%s' % i, headers = AdministratorHeaders()).json()
+        self.assertEqual('wsi', project['primary_viewer'])
+
+        requests.put(URL + '/education/api/projects/%s/secondary-viewers' % i, json.dumps([ 'stone' ]), headers = InstructorHeaders()).raise_for_status()
+        project = requests.get(URL + '/education/api/projects/%s' % i, headers = AdministratorHeaders()).json()
+        v = list(map(lambda x: x['id'], project['secondary_viewers']))
+        self.assertEqual(1, len(v))
+        self.assertTrue('stone' in v)
+
+        ## The other parameters are still not allowed for the instructor
+
+        self.assertEqual(403, requests.put(URL + '/education/api/projects/%s/name' % i, json.dumps('Nope'), headers = InstructorHeaders()).status_code)
+        self.assertEqual(403, requests.put(URL + '/education/api/projects/%s/description' % i, json.dumps('Nope'), headers = InstructorHeaders()).status_code)
+        self.assertEqual(403, requests.put(URL + '/education/api/projects/%s/instructors' % i, json.dumps([ 'a', 'instructor@uclouvain.be' ]), headers = InstructorHeaders()).status_code)
+        self.assertEqual(403, requests.put(URL + '/education/api/projects/%s/learners' % i, json.dumps([ 'a' ]), headers = InstructorHeaders()).status_code)
+        self.assertEqual(403, requests.put(URL + '/education/api/projects/%s/lti-context-id' % i, json.dumps('context'), headers = InstructorHeaders()).status_code)
+        self.assertEqual(403, requests.delete(URL + '/education/api/projects/%s/lti-context-id' % i, headers = InstructorHeaders()).status_code)
 
 try:
     print('\nStarting the tests...')
