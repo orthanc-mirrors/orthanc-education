@@ -652,6 +652,16 @@ extern "C"
         }
       }
 
+      if (configEducation.LookupStringValue(s, "Dicomizer"))
+      {
+        EducationConfiguration::GetInstance().SetPathToDicomizer(s);
+      }
+
+      if (configEducation.LookupStringValue(s, "OpenSlide"))
+      {
+        EducationConfiguration::GetInstance().SetPathToOpenSlide(s);
+      }
+
 
       // Serve the static assets. They cannot be served using
       // "RegisterPublicRoute()", as they might have an arbitrary depth.

@@ -247,19 +247,19 @@ static const char* const GetHomepage(Role role)
 {
   switch (role)
   {
-  case Role_Administrator:
-    // Redirect to the dashboard if the user is already logged as an administrator
-    return "education/app/dashboard.html";
+    case Role_Administrator:
+      // Redirect to the dashboard if the user is already logged as an administrator
+      return "education/app/dashboard.html";
 
-  case Role_Standard:
-    return "education/app/list-projects.html";
+    case Role_Standard:
+      return "education/app/list-projects.html";
 
-  case Role_Guest:
-    // By default, redirect to the login page
-    return "education/app/login.html";
+    case Role_Guest:
+      // By default, redirect to the login page
+      return "education/app/login.html";
 
-  default:
-    throw Orthanc::OrthancException(Orthanc::ErrorCode_ParameterOutOfRange);
+    default:
+      throw Orthanc::OrthancException(Orthanc::ErrorCode_ParameterOutOfRange);
   }
 }
 
@@ -1192,85 +1192,117 @@ void SetLtiClientId(OrthancPluginRestOutput* output,
 }
 
 
-class ActiveUpload : public boost::noncopyable
-{
-private:
-  Orthanc::TemporaryFile  file_;
-  uint64_t                pos_;
-  uint64_t                fileSize_;
-
-public:
-  ActiveUpload(uint64_t fileSize) :
-    pos_(0),
-    fileSize_(fileSize)
-  {
-  }
-
-  uint64_t GetFileSize() const
-  {
-    return fileSize_;
-  }
-
-  bool WriteChunk(size_t start,
-                  const void* data,
-                  size_t size)
-  {
-    if (pos_ != start ||
-        pos_ + size > fileSize_)
-    {
-      return false;
-    }
-    else if (size == 0)
-    {
-      return true;
-    }
-    else
-    {
-      try
-      {
-        boost::iostreams::stream<boost::iostreams::file_descriptor_sink> f;
-
-        f.open(file_.GetPath(), std::ofstream::out | std::ofstream::binary | std::ofstream::app);
-        if (!f.good())
-        {
-          return false;
-        }
-
-        f.write(reinterpret_cast<const char*>(data), size);
-
-        bool good = f.good();
-        f.close();
-
-        if (good)
-        {
-          pos_ += static_cast<uint64_t>(size);
-          return true;
-        }
-        else
-        {
-          return false;
-        }
-      }
-      catch (boost::filesystem::filesystem_error&)
-      {
-      }
-      catch (...)  // To catch "std::system_error&" in C++11
-      {
-      }
-
-      return false;
-    }
-  }
-};
-
-
 class ActiveUploads : public boost::noncopyable
 {
 private:
-  typedef std::map<std::string, ActiveUpload*>  Content;
+  class Upload : public boost::noncopyable
+  {
+  private:
+    std::unique_ptr<Orthanc::TemporaryFile>  file_;
+    uint64_t                                 pos_;
+    uint64_t                                 fileSize_;
+
+  public:
+    Upload(uint64_t fileSize) :
+      file_(new Orthanc::TemporaryFile),
+      pos_(0),
+      fileSize_(fileSize)
+    {
+    }
+
+    Orthanc::TemporaryFile* ReleaseTemporaryFile()
+    {
+      if (pos_ == fileSize_)
+      {
+        return file_.release();
+      }
+      else
+      {
+        return NULL;
+      }
+    }
+
+    bool AppendChunk(uint64_t start,
+                     uint64_t fileSize,
+                     const void* data,
+                     size_t size)
+    {
+      if (fileSize != fileSize_)
+      {
+        throw Orthanc::OrthancException(Orthanc::ErrorCode_ParameterOutOfRange);
+      }
+
+      if (file_.get() == NULL)
+      {
+        throw Orthanc::OrthancException(Orthanc::ErrorCode_BadSequenceOfCalls);
+      }
+
+      if (pos_ != start ||
+          pos_ + size > fileSize_)
+      {
+        return false;
+      }
+      else if (size == 0)
+      {
+        return true;
+      }
+      else
+      {
+        try
+        {
+          boost::iostreams::stream<boost::iostreams::file_descriptor_sink> f;
+
+          f.open(file_->GetPath(), std::ofstream::out | std::ofstream::binary | std::ofstream::app);
+          if (!f.good())
+          {
+            return false;
+          }
+
+          f.write(reinterpret_cast<const char*>(data), size);
+
+          bool good = f.good();
+          f.close();
+
+          if (good)
+          {
+            pos_ += static_cast<uint64_t>(size);
+            return true;
+          }
+          else
+          {
+            return false;
+          }
+        }
+        catch (boost::filesystem::filesystem_error&)
+        {
+        }
+        catch (...)  // To catch "std::system_error&" in C++11
+        {
+        }
+
+        return false;
+      }
+    }
+  };
+
+
+  typedef std::map<std::string, Upload*>  Content;
 
   boost::mutex   mutex_;
   Content        content_;
+
+  void EraseInternal(const std::string& uploadId)
+  {
+    // Mutex must be locked
+    Content::iterator found = content_.find(uploadId);
+    if (found != content_.end())
+    {
+      assert(found != content_.end());
+      assert(found->second != NULL);
+      delete found->second;
+      content_.erase(uploadId);
+    }
+  }
 
 public:
   static ActiveUploads& GetInstance()
@@ -1297,62 +1329,87 @@ public:
     content_.clear();
   }
 
-  class Accessor : public boost::noncopyable
+  void Erase(const std::string& uploadId)
   {
-  private:
-    boost::mutex::scoped_lock lock_;
-    ActiveUploads&            uploads_;
-    std::string               key_;
-    ActiveUpload*             upload_;
+    boost::mutex::scoped_lock lock(mutex_);
+    EraseInternal(uploadId);
+  }
 
-    void Erase()
-    {
-      Content::iterator found = uploads_.content_.find(key_);
-      assert(found != uploads_.content_.end());
-      assert(found->second != NULL);
-      delete found->second;
-      uploads_.content_.erase(key_);
-    }
+  void AppendChunk(const std::string& uploadId,
+                   uint64_t start,
+                   uint64_t end,
+                   uint64_t fileSize,
+                   const void* chunk,
+                   size_t chunkSize)
+  {
+    boost::mutex::scoped_lock lock(mutex_);
 
-  public:
-    Accessor(ActiveUploads& uploads,
-             const std::string& key,
-             uint64_t fileSize) :
-      lock_(uploads.mutex_),
-      uploads_(uploads),
-      key_(key)
+    try
     {
-      Content::iterator found = uploads.content_.find(key);
-      if (found == uploads.content_.end())
+      if (start > end ||
+          end >= fileSize ||
+          end - start + 1 != chunkSize)
       {
-        upload_ = new ActiveUpload(fileSize);
-        uploads.content_[key] = upload_;
+        throw Orthanc::OrthancException(Orthanc::ErrorCode_NetworkProtocol, "Bad range header");
       }
-      else if (found->second->GetFileSize() != fileSize)
+
+      Content::iterator found = content_.find(uploadId);
+      if (found == content_.end())
       {
-        Erase();
-        throw Orthanc::OrthancException(Orthanc::ErrorCode_NetworkProtocol, "Mismatch in upload size");
+        std::unique_ptr<Upload> upload(new Upload(fileSize));
+
+        if (!upload->AppendChunk(start, fileSize, chunk, chunkSize))
+        {
+          throw Orthanc::OrthancException(Orthanc::ErrorCode_NetworkProtocol, "Mismatch in uploaded chunk");
+        }
+
+        content_[uploadId] = upload.release();
       }
       else
       {
-        upload_ = found->second;
-      }
-    }
+        assert(found->second != NULL);
 
-    void WriteChunk(size_t start,
-                    size_t end,
-                    const void* data,
-                    size_t size)
-    {
-      if (start > end ||
-          end - start + 1 != size ||
-          !upload_->WriteChunk(start, data, size))
-      {
-        Erase();
-        throw Orthanc::OrthancException(Orthanc::ErrorCode_NetworkProtocol, "Mismatch in uploaded chunk");
+        if (!found->second->AppendChunk(start, fileSize, chunk, chunkSize))
+        {
+          throw Orthanc::OrthancException(Orthanc::ErrorCode_NetworkProtocol, "Mismatch in uploaded chunk");
+        }
       }
     }
-  };
+    catch (Orthanc::OrthancException&)
+    {
+      EraseInternal(uploadId);
+      throw;
+    }
+  }
+
+
+  Orthanc::TemporaryFile* ReleaseTemporaryFile(const std::string& uploadId)
+  {
+    boost::mutex::scoped_lock lock(mutex_);
+
+    Content::iterator found = content_.find(uploadId);
+    if (found == content_.end())
+    {
+      throw Orthanc::OrthancException(Orthanc::ErrorCode_UnknownResource);
+    }
+    else
+    {
+      assert(found->second != NULL);
+
+      std::unique_ptr<Orthanc::TemporaryFile> file(found->second->ReleaseTemporaryFile());
+
+      EraseInternal(uploadId);
+
+      if (file.get() == NULL)
+      {
+        throw Orthanc::OrthancException(Orthanc::ErrorCode_BadSequenceOfCalls, "Cannot release an incomplete upload");
+      }
+      else
+      {
+        return file.release();
+      }
+    }
+  }
 };
 
 
@@ -1372,8 +1429,8 @@ void UploadFile(OrthancPluginRestOutput* output,
     std::map<std::string, std::string> headers;
     HttpToolbox::ConvertDictionaryFromC(headers, true, request->headersCount, request->headersKeys, request->headersValues);
 
-    std::string key, range;
-    if (HttpToolbox::LookupHttpHeader(key, headers, "upload-id") &&
+    std::string uploadId, range;
+    if (HttpToolbox::LookupHttpHeader(uploadId, headers, "upload-id") &&
         HttpToolbox::LookupHttpHeader(range, headers, "content-range"))
     {
       boost::regex pattern("bytes ([0-9]+)-([0-9]+)/([0-9]+)");
@@ -1387,10 +1444,11 @@ void UploadFile(OrthancPluginRestOutput* output,
       {
         throw Orthanc::OrthancException(Orthanc::ErrorCode_BadRequest);
       }
-
-      ActiveUploads::Accessor accessor(ActiveUploads::GetInstance(), key, fileSize);
-      accessor.WriteChunk(start, end, request->body, request->bodySize);
-      HttpToolbox::AnswerText(output, "");
+      else
+      {
+        ActiveUploads::GetInstance().AppendChunk(uploadId, start, end, fileSize, request->body, request->bodySize);
+        HttpToolbox::AnswerText(output, "");
+      }
     }
     else
     {
@@ -1398,6 +1456,616 @@ void UploadFile(OrthancPluginRestOutput* output,
     }
   }
 }
+
+
+class SharedOutputBuffer : public boost::noncopyable
+{
+private:
+  boost::mutex   mutex_;
+  std::string    content_;
+
+public:
+  void Append(const std::string& data)
+  {
+    boost::mutex::scoped_lock lock(mutex_);
+    content_ += data;
+  }
+
+  void GetContent(std::string& content)
+  {
+    boost::mutex::scoped_lock lock(mutex_);
+    content  = content_;
+  }
+};
+
+
+class IDicomization : public boost::noncopyable
+{
+public:
+  virtual ~IDicomization()
+  {
+  }
+
+  virtual bool Execute(std::unique_ptr<Orthanc::TemporaryFile>& file,
+                       SharedOutputBuffer& log,
+                       bool& stopped) = 0;
+};
+
+
+enum DicomizationStatus
+{
+  DicomizationStatus_Pending,
+  DicomizationStatus_Running,
+  DicomizationStatus_Success,
+  DicomizationStatus_Failure
+};
+
+
+
+class DicomizationThread : public boost::noncopyable
+{
+private:
+  boost::mutex                    mutex_;
+  std::string                     uploadId_;
+  std::unique_ptr<IDicomization>  dicomization_;
+  DicomizationStatus              status_;
+  bool                            stopped_;
+  boost::thread                   thread_;
+  SharedOutputBuffer              log_;
+
+  static void Runnable(DicomizationThread* that)
+  {
+    assert(that != NULL);
+
+    std::unique_ptr<Orthanc::TemporaryFile> file;
+
+    try
+    {
+      file.reset(ActiveUploads::GetInstance().ReleaseTemporaryFile(that->uploadId_));
+    }
+    catch (Orthanc::OrthancException&)
+    {
+      boost::mutex::scoped_lock lock(that->mutex_);
+      that->status_ = DicomizationStatus_Failure;
+      return;
+    }
+
+    assert(file.get() != NULL);
+
+    bool success;
+
+    try
+    {
+      success = that->dicomization_->Execute(file, that->log_, that->stopped_);
+    }
+    catch (Orthanc::OrthancException&)
+    {
+      success = false;
+    }
+    catch (...)
+    {
+      success = false;
+    }
+
+    {
+      boost::mutex::scoped_lock lock(that->mutex_);
+      that->status_ = (success ? DicomizationStatus_Success : DicomizationStatus_Failure);
+    }
+  }
+
+public:
+  DicomizationThread(const std::string& uploadId,
+                     IDicomization* dicomization) :
+    uploadId_(uploadId),
+    dicomization_(dicomization),
+    status_(DicomizationStatus_Pending),
+    stopped_(false)
+  {
+    if (dicomization == NULL)
+    {
+      throw Orthanc::OrthancException(Orthanc::ErrorCode_NullPointer);
+    }
+  }
+
+  ~DicomizationThread()
+  {
+    Wait();
+  }
+
+  void Start()
+  {
+    boost::mutex::scoped_lock lock(mutex_);
+
+    if (status_ != DicomizationStatus_Pending)
+    {
+      throw Orthanc::OrthancException(Orthanc::ErrorCode_BadSequenceOfCalls);
+    }
+    else
+    {
+      status_ = DicomizationStatus_Running;
+      thread_ = boost::thread(Runnable, this);
+    }
+  }
+
+  void Terminate()
+  {
+    stopped_ = true;
+    Wait();
+  }
+
+  void Wait()
+  {
+    if (thread_.joinable())
+    {
+      thread_.join();
+    }
+  }
+
+  virtual DicomizationStatus GetStatus()
+  {
+    boost::mutex::scoped_lock lock(mutex_);
+    return status_;
+  }
+};
+
+
+#include <reproc/reproc.h>
+
+#include <ChunkedBuffer.h>
+
+
+class ProcessRunner : public boost::noncopyable
+{
+public:
+  enum Stream
+  {
+    Stream_Output,
+    Stream_Error
+  };
+
+private:
+  reproc_t       *process_;
+  bool            started_;
+  REPROC_STREAM   readFrom_;
+
+public:
+  ProcessRunner() :
+    started_(false)
+  {
+    process_ = reproc_new();
+    if (!process_)
+    {
+      throw Orthanc::OrthancException(Orthanc::ErrorCode_InternalError, "Cannot create process");
+    }
+  }
+
+  ~ProcessRunner()
+  {
+    assert(process_ != NULL);
+
+    if (started_)
+    {
+      reproc_wait(process_, REPROC_INFINITE /* wait until the process stops */);
+    }
+
+    reproc_destroy(process_);
+  }
+
+  void Start(const std::string& command,
+             const std::list<std::string>& args,
+             Stream readFrom)
+  {
+    if (started_)
+    {
+      throw Orthanc::OrthancException(Orthanc::ErrorCode_BadSequenceOfCalls);
+    }
+
+    std::vector<const char*> argv(args.size() + 2);
+    argv[0] = command.c_str();
+
+    size_t pos = 1;
+    for (std::list<std::string>::const_iterator it = args.begin(); it != args.end(); ++it, pos++)
+    {
+      argv[pos] = it->c_str();
+    }
+
+    assert(pos == argv.size() - 1);
+    argv[pos] = NULL;
+
+    reproc_options options;
+    memset(&options, 0, sizeof(options));
+
+    options.nonblocking = true;
+
+    switch (readFrom)
+    {
+      case Stream_Output:
+        readFrom_ = REPROC_STREAM_OUT;
+        options.redirect.out.type = REPROC_REDIRECT_PIPE;
+        options.redirect.err.type = REPROC_REDIRECT_DISCARD;
+        break;
+
+      case Stream_Error:
+        readFrom_ = REPROC_STREAM_ERR;
+        options.redirect.out.type = REPROC_REDIRECT_DISCARD;
+        options.redirect.err.type = REPROC_REDIRECT_PIPE;
+        break;
+
+      default:
+        throw Orthanc::OrthancException(Orthanc::ErrorCode_ParameterOutOfRange);
+    }
+
+    if (reproc_start(process_, &argv[0], options) < 0 ||
+        // Close stdin as we do not provide input to the child process
+        reproc_close(process_, REPROC_STREAM_IN) < 0)
+    {
+      throw Orthanc::OrthancException(Orthanc::ErrorCode_InternalError, "Cannot start process");
+    }
+
+    started_ = true;
+  }
+
+  void Read(std::string& data)
+  {
+    if (!started_)
+    {
+      throw Orthanc::OrthancException(Orthanc::ErrorCode_BadSequenceOfCalls);
+    }
+
+    Orthanc::ChunkedBuffer buffer;
+
+    uint8_t tmp[4096];
+
+    for (;;)
+    {
+      int r = reproc_read(process_, readFrom_, tmp, sizeof(tmp));
+      if (r <= 0)
+      {
+        break;
+      }
+      else
+      {
+        buffer.AddChunk(tmp, r);
+      }
+    }
+
+    buffer.Flatten(data);
+  }
+
+  bool IsRunning()
+  {
+    if (!started_)
+    {
+      throw Orthanc::OrthancException(Orthanc::ErrorCode_BadSequenceOfCalls);
+    }
+
+    int status = reproc_wait(process_, 0 /* don't wait */);
+    return (status == REPROC_ETIMEDOUT);
+  }
+
+  void Terminate()
+  {
+    if (!started_)
+    {
+      throw Orthanc::OrthancException(Orthanc::ErrorCode_BadSequenceOfCalls);
+    }
+
+    reproc_kill(process_);
+  }
+};
+
+
+#include <Compression/ZipReader.h>
+
+
+static bool IsZipFile(const boost::filesystem::path& path)
+{
+  std::string header;
+  Orthanc::SystemToolbox::ReadFileRange(header, path, 0, 4, false /* don't throw exception */);
+
+  if (header.size() != 4)
+  {
+    return false;
+  }
+  else
+  {
+    // https://en.wikipedia.org/wiki/List_of_file_signatures
+    const uint8_t *b = reinterpret_cast<const uint8_t*>(header.c_str());
+    return ((b[0] == 0x50 && b[1] == 0x4b && b[2] == 0x03 && b[3] == 0x04) ||
+            (b[0] == 0x50 && b[1] == 0x4b && b[2] == 0x05 && b[3] == 0x06) ||
+            (b[0] == 0x50 && b[1] == 0x4b && b[2] == 0x07 && b[3] == 0x08));
+  }
+}
+
+
+class TemporaryDirectory : public boost::noncopyable
+{
+private:
+  boost::filesystem::path  root_;
+
+public:
+  TemporaryDirectory()
+  {
+    {
+      // Delegate the choice of the path to the Orthanc framework
+      Orthanc::TemporaryFile tmp;
+      root_ = tmp.GetPath();
+    }
+
+    boost::filesystem::create_directories(root_);
+  }
+
+  ~TemporaryDirectory()
+  {
+    try
+    {
+      Clear();
+    }
+    catch (...)
+    {
+      // Ignore errors in destructor
+    }
+  }
+
+  const boost::filesystem::path& GetRoot() const
+  {
+    return root_;
+  }
+
+  boost::filesystem::path GetPath(const std::string& filename) const
+  {
+    return root_ / filename;
+  }
+
+  void Clear()
+  {
+    try
+    {
+      boost::filesystem::remove_all(root_);
+    }
+    catch (const boost::filesystem::filesystem_error&)
+    {
+      throw Orthanc::OrthancException(Orthanc::ErrorCode_InternalError, "Cannot remove temporary directory: " + root_.string());
+    }
+  }
+
+  void WriteFile(const std::string& filename,
+                 const std::string& content)
+  {
+    boost::filesystem::path path = GetPath(filename);
+    boost::filesystem::create_directories(path.parent_path());
+    Orthanc::SystemToolbox::WriteFile(content, path.string());
+  }
+};
+
+
+class WholeSlideImagingDicomization : public IDicomization
+{
+private:
+  std::string  studyDescription_;
+  uint8_t      backgroundRed_;
+  uint8_t      backgroundGreen_;
+  uint8_t      backgroundBlue_;
+  bool         forceOpenSlide_;
+  bool         reconstructPyramid_;
+
+public:
+  WholeSlideImagingDicomization() :
+    studyDescription_("Whole-slide image"),
+    backgroundRed_(255),
+    backgroundGreen_(255),
+    backgroundBlue_(255),
+    forceOpenSlide_(false),
+    reconstructPyramid_(true)
+  {
+  }
+
+  void SetStudyDescription(const std::string& studyDescription)
+  {
+    studyDescription_ = studyDescription;
+  }
+
+  void SetBackgroundColor(uint8_t red,
+                          uint8_t green,
+                          uint8_t blue)
+  {
+    backgroundRed_ = red;
+    backgroundGreen_ = green;
+    backgroundBlue_ = blue;
+  }
+
+  void SetForceOpenSlide(bool force)
+  {
+    forceOpenSlide_ = force;
+  }
+
+  void SetReconstructPyramid(bool reconstruct)
+  {
+    reconstructPyramid_ = reconstruct;
+  }
+
+  virtual bool Execute(std::unique_ptr<Orthanc::TemporaryFile>& file,
+                       SharedOutputBuffer& log,
+                       bool& stopped) ORTHANC_OVERRIDE
+  {
+    assert(file.get() != NULL);
+
+    const std::string dicomizer = EducationConfiguration::GetInstance().GetPathToDicomizer();
+    if (dicomizer.empty())
+    {
+      throw Orthanc::OrthancException(Orthanc::ErrorCode_BadFileFormat, "No DICOM-izer is configured for whole-slide images");
+    }
+
+    std::unique_ptr<TemporaryDirectory> unzip;
+    std::string unzipMaster;
+
+    if (IsZipFile(file->GetPath()))
+    {
+      unzip.reset(new TemporaryDirectory);
+
+      std::unique_ptr<Orthanc::ZipReader> reader(Orthanc::ZipReader::CreateFromFile(file->GetPath()));
+
+      std::string filename, content;
+      while (reader->ReadNextFile(filename, content))
+      {
+        if (stopped)
+        {
+          return false;
+        }
+
+        // Ignore directories in the ZIP
+        if (!boost::ends_with(filename, "/"))
+        {
+          unzip->WriteFile(filename, content);
+
+          boost::filesystem::path path(unzip->GetPath(filename));
+
+          const std::string& extension = path.extension().string();
+
+          if (extension == ".mrxs" ||
+              extension == ".ndpi" ||
+              extension == ".scn" ||
+              extension == ".tif" ||
+              extension == ".tiff" ||
+              extension == ".png" ||
+              extension == ".jpg" ||
+              extension == ".jpeg")
+          {
+            if (unzipMaster.empty())
+            {
+              unzipMaster = path.string();
+            }
+            else
+            {
+              throw Orthanc::OrthancException(Orthanc::ErrorCode_BadFileFormat, "ZIP file containing multiple candidate whole-slide images");
+            }
+          }
+        }
+      }
+
+      if (unzipMaster.empty())
+      {
+        throw Orthanc::OrthancException(Orthanc::ErrorCode_BadFileFormat, "ZIP file containing no whole-slide image");
+      }
+
+      file.reset(NULL);  // We don't need the ZIP file anymore
+    }
+
+    Orthanc::TemporaryFile dataset;
+
+    {
+      Json::Value json;
+      json["StudyDescription"] = studyDescription_;
+
+      std::string s;
+      Orthanc::Toolbox::WriteFastJson(s, json);
+      dataset.Write(s);
+    }
+
+    std::list<std::string> args;
+
+    if (unzip.get() == NULL)
+    {
+      args.push_back(file->GetPath().string());
+    }
+    else
+    {
+      args.push_back(unzipMaster);
+    }
+
+    args.push_back("--dataset");
+    args.push_back(dataset.GetPath().string());
+
+    if (reconstructPyramid_)
+    {
+      args.push_back("--pyramid");
+      args.push_back("1");
+    }
+
+    if (forceOpenSlide_)
+    {
+      args.push_back("--force-openslide");
+      args.push_back("1");
+    }
+
+    args.push_back("--color");
+
+    {
+      char color[32];
+      sprintf(color, "%d,%d,%d", backgroundRed_, backgroundGreen_, backgroundBlue_);
+      args.push_back(color);
+    }
+
+    const std::string openslide = EducationConfiguration::GetInstance().GetPathToOpenSlide();
+    if (!openslide.empty())
+    {
+      args.push_back("--openslide");
+      args.push_back(openslide);
+    }
+
+    std::unique_ptr<TemporaryDirectory> target(new TemporaryDirectory);
+    args.push_back("--folder");
+    args.push_back(target->GetRoot().string());
+
+    {
+      ProcessRunner runner;
+      runner.Start(dicomizer, args, ProcessRunner::Stream_Error);
+
+      int i = 0;
+      while (runner.IsRunning())
+      {
+        if (stopped)
+        {
+          runner.Terminate();
+          return false;
+        }
+
+        std::string s;
+        runner.Read(s);
+        log.Append(s);
+
+        boost::this_thread::sleep(boost::posix_time::milliseconds(100));
+      }
+
+      {
+        std::string s;
+        runner.Read(s);
+        log.Append(s);
+      }
+    }
+
+    unzip.reset(NULL);
+    file.reset(NULL);
+
+    boost::filesystem::directory_iterator iterator(target->GetRoot());
+    boost::filesystem::directory_iterator end;
+
+    while (iterator != end)
+    {
+      if (stopped)
+      {
+        return false;
+      }
+
+      std::string content;
+      Orthanc::SystemToolbox::ReadFile(content, iterator->path());
+
+      if (!content.empty())
+      {
+        Json::Value answer;
+        if (!OrthancPlugins::RestApiPost(answer, "/instances", content.c_str(), content.size(), false))
+        {
+          throw Orthanc::OrthancException(Orthanc::ErrorCode_InternalError, "Cannot upload a DICOM-ized file");
+        }
+      }
+
+      ++iterator;
+    }
+
+    return true;
+  }
+};
+
 
 
 void Dicomization(OrthancPluginRestOutput* output,
@@ -1410,7 +2078,41 @@ void Dicomization(OrthancPluginRestOutput* output,
 
   std::cout << body.toStyledString();
 
-  HttpToolbox::AnswerText(output, "");
+  const std::string uploadId = Orthanc::SerializationToolbox::ReadString(body, "upload-id");
+
+  try
+  {
+    std::unique_ptr<WholeSlideImagingDicomization> dicomization(new WholeSlideImagingDicomization);
+
+    const std::string color = Orthanc::SerializationToolbox::ReadString(body, "background-color");
+    if (color == "black")
+    {
+      dicomization->SetBackgroundColor(0, 0, 0);
+    }
+    else if (color == "white")
+    {
+      dicomization->SetBackgroundColor(255, 255, 255);
+    }
+    else
+    {
+      throw Orthanc::OrthancException(Orthanc::ErrorCode_ParameterOutOfRange);
+    }
+
+    dicomization->SetStudyDescription(Orthanc::SerializationToolbox::ReadString(body, "study-description"));
+    dicomization->SetForceOpenSlide(Orthanc::SerializationToolbox::ReadBoolean(body, "force-openslide"));
+    dicomization->SetReconstructPyramid(Orthanc::SerializationToolbox::ReadBoolean(body, "reconstruct-pyramid"));
+
+    {
+      DicomizationThread t(uploadId, dicomization.release());
+      t.Start();
+    }
+
+    HttpToolbox::AnswerText(output, "");
+  }
+  catch (Orthanc::OrthancException&)
+  {
+    ActiveUploads::GetInstance().Erase(uploadId);
+  }
 }
 
 

@@ -431,17 +431,17 @@
                       </div>
                       <div class="mb-3" v-if="isDicomizationWSI">
                         <label for="dicomizationColor" class="form-label">Background color:&nbsp;&nbsp;</label>
-                        <select id="dicomizationColor" class="form-select">
+                        <select id="dicomizationColor" class="form-select" v-model="dicomizationBackgroundColor">
                           <option value="white">White</option>
                           <option value="black">Black</option>
                         </select>
                       </div>
                       <div class="mb-3" v-if="isDicomizationWSI">
-                        <input class="form-check-input" type="checkbox" id="dicomizationOpenSlide">&nbsp;&nbsp;
+                        <input class="form-check-input" type="checkbox" id="dicomizationOpenSlide" v-model="dicomizationOpenSlide">&nbsp;&nbsp;
                         <label for="dicomizationOpenSlide" class="form-label">Force OpenSlide (slower, if import does not succeed)</label>
                       </div>
                       <div class="mb-3" v-if="isDicomizationWSI">
-                        <input class="form-check-input" type="checkbox" id="dicomizationPyramid" checked>&nbsp;&nbsp;
+                        <input class="form-check-input" type="checkbox" id="dicomizationPyramid" v-model="dicomizationPyramid">&nbsp;&nbsp;
                         <label for="dicomizationPyramid" class="form-label">Reconstruct pyramid (better, but may result in larger files)</label>
                       </div>
                       <p v-if="isUploadAvailable">

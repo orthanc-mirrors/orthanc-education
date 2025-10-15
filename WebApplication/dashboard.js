@@ -61,16 +61,21 @@ var app = new Vue({
 
       editProjectsSwitch: false,
       editImagesSwitch: false,
-      dicomizationType: 'wsi',
-      uploading: false,
-      uploadProgress: 0,
-      uploadSize: 0,
 
       configLtiClientId: '',
 
       // Variables that are used by multiple tabs
       filter: '',
-      selectedViewer: ''
+      selectedViewer: '',
+
+      // For DICOM-ization
+      dicomizationType: 'wsi',
+      uploading: false,
+      uploadProgress: 0,
+      uploadSize: 0,
+      dicomizationBackgroundColor: 'white',
+      dicomizationOpenSlide: false,
+      dicomizationPyramid: true
     }
   },
 
@@ -514,15 +519,28 @@ var app = new Vue({
       this.uploadProgress = 0;
       this.uploadSize = Math.round(file.size / (1024 * 1024));
 
+      var dicomization = {
+        'upload-id': uploadId,
+        'type' : this.dicomizationType
+      }
+
+      if (this.dicomizationType == 'wsi') {
+        dicomization['background-color'] = this.dicomizationBackgroundColor;
+        dicomization['force-openslide'] = this.dicomizationOpenSlide;
+        dicomization['reconstruct-pyramid'] = this.dicomizationPyramid;
+        dicomization['study-description'] = file.name;
+      } else {
+        alert('Not implemented');
+        return;
+      }
+
       var that = this;
 
       function uploadChunk(currentChunk) {
         if (currentChunk >= totalChunks) {
           console.log('All chunks uploaded successfully!');
 
-          axios.post('../api/dicomization', {
-            upload_id: uploadId
-          })
+          axios.post('../api/dicomization', dicomization)
             .then(function(res) {
               that.uploading = false;
               console.log('Upload is now being DICOM-ized');
