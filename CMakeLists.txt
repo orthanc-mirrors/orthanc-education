@@ -87,7 +87,7 @@ else()
 
   set(ENABLE_ZLIB ON)
   set(ENABLE_LOCALE OFF)         # Disable support for locales (notably in Boost)
-  set(ENABLE_MODULE_JOBS OFF CACHE INTERNAL "")
+  set(ENABLE_MODULE_JOBS ON CACHE INTERNAL "")
   set(ENABLE_MODULE_DICOM ON CACHE INTERNAL "")
 
   include(${ORTHANC_FRAMEWORK_ROOT}/../Resources/CMake/OrthancFrameworkConfiguration.cmake)

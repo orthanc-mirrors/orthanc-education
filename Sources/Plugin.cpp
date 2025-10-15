@@ -453,6 +453,7 @@ static OrthancPluginErrorCode OnChangeCallback(OrthancPluginChangeType changeTyp
     }
 
     case OrthancPluginChangeType_OrthancStopped:
+      FinalizeEducationJobsEngine();
       break;
 
     default:

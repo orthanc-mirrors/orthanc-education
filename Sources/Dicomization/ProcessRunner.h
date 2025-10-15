@@ -42,6 +42,7 @@ private:
   reproc_t       *process_;
   bool            started_;
   REPROC_STREAM   readFrom_;
+  int             exitCode_;
 
 public:
   ProcessRunner();
@@ -57,4 +58,9 @@ public:
   bool IsRunning();
 
   void Terminate();
+
+  int GetExitCode() const
+  {
+    return exitCode_;
+  }
 };

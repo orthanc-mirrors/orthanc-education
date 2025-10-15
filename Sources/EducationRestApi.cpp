@@ -1488,131 +1488,13 @@ public:
   {
   }
 
+  virtual std::string GetName() = 0;
+
+  virtual std::string GetJobType() = 0;
+
   virtual bool Execute(std::unique_ptr<Orthanc::TemporaryFile>& upload,
                        SharedOutputBuffer& log,
                        const bool& stopped) = 0;
-};
-
-
-
-class DicomizationThread : public boost::noncopyable
-{
-public:
-  enum Status
-  {
-    Status_Pending,
-    Status_Running,
-    Status_Success,
-    Status_Failure
-  };
-
-private:
-  boost::mutex                    mutex_;
-  std::string                     uploadId_;
-  std::unique_ptr<IDicomization>  dicomization_;
-  Status                          status_;
-  bool                            stopped_;
-  boost::thread                   thread_;
-  SharedOutputBuffer              log_;
-
-  static void Runnable(DicomizationThread* that)
-  {
-    assert(that != NULL);
-
-    std::unique_ptr<Orthanc::TemporaryFile> upload;
-
-    try
-    {
-      upload.reset(ActiveUploads::GetInstance().ReleaseTemporaryFile(that->uploadId_));
-    }
-    catch (Orthanc::OrthancException&)
-    {
-      boost::mutex::scoped_lock lock(that->mutex_);
-      that->status_ = Status_Failure;
-      return;
-    }
-
-    assert(upload.get() != NULL);
-
-    bool success;
-
-    try
-    {
-      success = that->dicomization_->Execute(upload, that->log_, that->stopped_);
-    }
-    catch (Orthanc::OrthancException&)
-    {
-      success = false;
-    }
-    catch (...)
-    {
-      success = false;
-    }
-
-    {
-      boost::mutex::scoped_lock lock(that->mutex_);
-      that->status_ = (success ? Status_Success : Status_Failure);
-    }
-  }
-
-public:
-  DicomizationThread(const std::string& uploadId,
-                     IDicomization* dicomization) :
-    uploadId_(uploadId),
-    dicomization_(dicomization),
-    status_(Status_Pending),
-    stopped_(false)
-  {
-    if (dicomization == NULL)
-    {
-      throw Orthanc::OrthancException(Orthanc::ErrorCode_NullPointer);
-    }
-  }
-
-  ~DicomizationThread()
-  {
-    Wait();
-  }
-
-  void Start()
-  {
-    boost::mutex::scoped_lock lock(mutex_);
-
-    if (status_ != Status_Pending)
-    {
-      throw Orthanc::OrthancException(Orthanc::ErrorCode_BadSequenceOfCalls);
-    }
-    else
-    {
-      status_ = Status_Running;
-      thread_ = boost::thread(Runnable, this);
-    }
-  }
-
-  void Terminate()
-  {
-    stopped_ = true;
-    Wait();
-  }
-
-  void Wait()
-  {
-    if (thread_.joinable())
-    {
-      thread_.join();
-    }
-  }
-
-  Status GetStatus()
-  {
-    boost::mutex::scoped_lock lock(mutex_);
-    return status_;
-  }
-
-  void GetLog(std::string& log)
-  {
-    log_.GetContent(log);
-  }
 };
 
 
@@ -1762,7 +1644,7 @@ private:
       log.Append(s);
     }
 
-    return true;
+    return (runner.GetExitCode() == 0);
   }
 
   static bool UploadDicomToOrthanc(const TemporaryDirectory& target,
@@ -1829,6 +1711,16 @@ public:
   void SetReconstructPyramid(bool reconstruct)
   {
     reconstructPyramid_ = reconstruct;
+  }
+
+  virtual std::string GetName() ORTHANC_OVERRIDE
+  {
+    return studyDescription_;
+  }
+
+  virtual std::string GetJobType() ORTHANC_OVERRIDE
+  {
+    return "wsi";
   }
 
   virtual bool Execute(std::unique_ptr<Orthanc::TemporaryFile>& upload,
@@ -1903,6 +1795,194 @@ public:
 
 
 
+#include <JobsEngine/JobsEngine.h>
+
+static Orthanc::JobsEngine engine_(100);
+
+
+class DicomizationJob : public Orthanc::IJob
+{
+private:
+  enum Status
+  {
+    Status_Running,
+    Status_Success,
+    Status_Failure
+  };
+
+  std::string                     uploadId_;
+  std::unique_ptr<IDicomization>  dicomization_;
+  std::string                     name_;
+  std::string                     jobType_;
+  SharedOutputBuffer              log_;
+  boost::thread                   thread_;
+  bool                            stopped_;
+
+  boost::mutex                    mutex_;   // To protect "status_"
+  Status                          status_;
+
+  static void Worker(DicomizationJob* that)
+  {
+    assert(that != NULL);
+
+    std::unique_ptr<Orthanc::TemporaryFile> upload;
+
+    try
+    {
+      upload.reset(ActiveUploads::GetInstance().ReleaseTemporaryFile(that->uploadId_));
+    }
+    catch (Orthanc::OrthancException&)
+    {
+      boost::mutex::scoped_lock lock(that->mutex_);
+      that->status_ = Status_Failure;
+      return;
+    }
+
+    assert(upload.get() != NULL);
+
+    bool success;
+
+    try
+    {
+      success = that->dicomization_->Execute(upload, that->log_, that->stopped_);
+    }
+    catch (Orthanc::OrthancException& e)
+    {
+      success = false;
+    }
+    catch (...)
+    {
+      success = false;
+    }
+
+    {
+      boost::mutex::scoped_lock lock(that->mutex_);
+      that->status_ = (success ? Status_Success : Status_Failure);
+    }
+  }
+
+public:
+  DicomizationJob(const std::string& uploadId,
+                  IDicomization* dicomization) :
+    uploadId_(uploadId),
+    dicomization_(dicomization),
+    stopped_(false),
+    status_(Status_Running)
+  {
+    if (dicomization == NULL)
+    {
+      throw Orthanc::OrthancException(Orthanc::ErrorCode_NullPointer);
+    }
+
+    name_ = dicomization->GetName();
+    jobType_ = dicomization->GetJobType();
+  }
+
+  virtual ~DicomizationJob()
+  {
+    if (thread_.joinable())
+    {
+      thread_.join();
+    }
+  }
+
+  virtual void Start() ORTHANC_OVERRIDE
+  {
+    thread_ = boost::thread(Worker, this);
+  }
+
+  virtual Orthanc::JobStepResult Step(const std::string& jobId) ORTHANC_OVERRIDE
+  {
+    boost::this_thread::sleep(boost::posix_time::milliseconds(100));
+
+    {
+      boost::mutex::scoped_lock lock(mutex_);
+      if (status_ == Status_Success ||
+          status_ == Status_Failure)
+      {
+        return (status_ == Status_Success ?
+                Orthanc::JobStepResult::Success() :
+                Orthanc::JobStepResult::Failure(Orthanc::ErrorCode_InternalError, ""));
+      }
+    }
+
+    return Orthanc::JobStepResult::Continue();
+  }
+
+  virtual void Reset() ORTHANC_OVERRIDE
+  {
+    throw Orthanc::OrthancException(Orthanc::ErrorCode_NotImplemented);
+  }
+
+  virtual void Stop(Orthanc::JobStopReason reason) ORTHANC_OVERRIDE
+  {
+    if (reason == Orthanc::JobStopReason_Canceled)
+    {
+      stopped_ = true;
+    }
+
+    if (thread_.joinable())
+    {
+      thread_.join();
+    }
+  }
+
+  virtual float GetProgress() const ORTHANC_OVERRIDE
+  {
+    return 0;
+  }
+
+  virtual void GetJobType(std::string& target) const ORTHANC_OVERRIDE
+  {
+    target = jobType_;
+  }
+
+  virtual void GetPublicContent(Json::Value& value) const ORTHANC_OVERRIDE
+  {
+    std::string log;
+    const_cast<SharedOutputBuffer&>(log_).GetContent(log);
+
+    value = Json::objectValue;
+    value["log"] = log;
+    value["name"] = name_;
+  }
+
+  virtual bool Serialize(Json::Value& value) const ORTHANC_OVERRIDE
+  {
+    return false;
+  }
+
+  virtual bool GetOutput(std::string& output,
+                         Orthanc::MimeType& mime,
+                         std::string& filename,
+                         const std::string& key) ORTHANC_OVERRIDE
+  {
+    throw Orthanc::OrthancException(Orthanc::ErrorCode_NotImplemented);
+  }
+
+  virtual bool DeleteOutput(const std::string& key) ORTHANC_OVERRIDE
+  {
+    throw Orthanc::OrthancException(Orthanc::ErrorCode_NotImplemented);
+  }
+
+  virtual void DeleteAllOutputs() ORTHANC_OVERRIDE
+  {
+    throw Orthanc::OrthancException(Orthanc::ErrorCode_NotImplemented);
+  }
+
+  virtual bool GetUserData(Json::Value& userData) const ORTHANC_OVERRIDE
+  {
+    return false;
+  }
+
+  virtual void SetUserData(const Json::Value& userData) ORTHANC_OVERRIDE
+  {
+    throw Orthanc::OrthancException(Orthanc::ErrorCode_NotImplemented);
+  }
+};
+
+
+
 void Dicomization(OrthancPluginRestOutput* output,
                   const std::string& url,
                   const OrthancPluginHttpRequest* request,
@@ -1910,8 +1990,6 @@ void Dicomization(OrthancPluginRestOutput* output,
                   const Json::Value& body)
 {
   assert(user.GetRole() == Role_Administrator);
-
-  std::cout << body.toStyledString();
 
   const std::string uploadId = Orthanc::SerializationToolbox::ReadString(body, "upload-id");
 
@@ -1945,13 +2023,85 @@ void Dicomization(OrthancPluginRestOutput* output,
     throw;
   }
 
-  {
-    DicomizationThread t(uploadId, dicomization.release());
-    t.Start();
-  }
+  engine_.GetRegistry().Submit(new DicomizationJob(uploadId, dicomization.release()), 0 /* priority */);
 
   HttpToolbox::AnswerText(output, "");
 }
+
+
+void GetDicomizationStatus(OrthancPluginRestOutput* output,
+                           const std::string& url,
+                           const OrthancPluginHttpRequest* request,
+                           const AuthenticatedUser& user)
+{
+  assert(user.GetRole() == Role_Administrator);
+
+  std::set<std::string> jobs;
+  engine_.GetRegistry().ListJobs(jobs);
+
+  Json::Value answer = Json::arrayValue;
+
+  for (std::set<std::string>::const_iterator it = jobs.begin(); it != jobs.end(); ++it)
+  {
+    Orthanc::JobInfo info;
+    if (engine_.GetRegistry().GetJobInfo(info, *it))
+    {
+      Json::Value item;
+      item["id"] = *it;
+      item["time"] = boost::posix_time::to_iso_string(info.GetCreationTime());
+      item["name"] = Orthanc::SerializationToolbox::ReadString(info.GetStatus().GetPublicContent(), "name");
+      item["type"] = info.GetStatus().GetJobType();
+      // item["log"] = Orthanc::SerializationToolbox::ReadString(info.GetStatus().GetPublicContent(), "log");
+
+      switch (info.GetState())
+      {
+      case Orthanc::JobState_Success:
+        item["status"] = "success";
+        break;
+
+      case Orthanc::JobState_Pending:
+        item["status"] = "pending";
+        break;
+
+      case Orthanc::JobState_Running:
+        item["status"] = "running";
+        break;
+
+      default:
+        item["status"] = "failure";
+        break;
+      }
+
+      answer.append(item);
+    }
+  }
+
+  HttpToolbox::AnswerJson(output, answer);
+}
+
+
+void GetDicomizationLog(OrthancPluginRestOutput* output,
+                        const std::string& url,
+                        const OrthancPluginHttpRequest* request,
+                        const AuthenticatedUser& user)
+{
+  assert(user.GetRole() == Role_Administrator);
+
+  const std::string jobId(request->groups[0]);
+
+  Orthanc::JobInfo info;
+  if (engine_.GetRegistry().GetJobInfo(info, jobId))
+  {
+    std::string log = Orthanc::SerializationToolbox::ReadString(info.GetStatus().GetPublicContent(), "log");
+    HttpToolbox::AnswerText(output, log);
+  }
+  else
+  {
+    throw Orthanc::OrthancException(Orthanc::ErrorCode_UnknownResource);
+  }
+}
+
+
 
 
 
@@ -2006,6 +2156,11 @@ void RegisterEducationRestApiRoutes()
 
   RestApiRouter::RegisterAdministratorRoute<UploadFile>("/education/api/upload");
   RestApiRouter::RegisterAdministratorPostRoute<Dicomization>("/education/api/dicomization");
+  RestApiRouter::RegisterAdministratorGetRoute<GetDicomizationStatus>("/education/api/dicomization-status");
+  RestApiRouter::RegisterAdministratorGetRoute<GetDicomizationLog>("/education/api/dicomization-log/{}");
+
+  engine_.SetWorkersCount(1);
+  engine_.Start();
 }
 
 
@@ -2026,4 +2181,10 @@ AuthenticatedUser* AuthenticateFromEducationCookie(const std::list<HttpToolbox::
   }
 
   return NULL;
+}
+
+
+void FinalizeEducationJobsEngine()
+{
+  engine_.Stop();
 }

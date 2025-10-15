@@ -31,3 +31,6 @@
 void RegisterEducationRestApiRoutes();
 
 AuthenticatedUser* AuthenticateFromEducationCookie(const std::list<HttpToolbox::Cookie>& cookies);
+
+void FinalizeEducationJobsEngine();
+

@@ -33,7 +33,8 @@
 
 
 ProcessRunner::ProcessRunner() :
-  started_(false)
+  started_(false),
+  exitCode_(0)
 {
   process_ = reproc_new();
   if (!process_)
@@ -147,7 +148,15 @@ bool ProcessRunner::IsRunning()
   }
 
   int status = reproc_wait(process_, 0 /* don't wait */);
-  return (status == REPROC_ETIMEDOUT);
+  if (status == REPROC_ETIMEDOUT)
+  {
+    return true;
+  }
+  else
+  {
+    exitCode_ = status;
+    return false;
+  }
 }
 
 
