@@ -196,6 +196,8 @@ add_library(OrthancEducation
   ${ORTHANC_PLUGINS_SOURCES}
   ${REPROC_SOURCES}
 
+  Sources/Dicomization/ProcessRunner.cpp
+  Sources/Dicomization/TemporaryDirectory.cpp
   Sources/EducationConfiguration.cpp
   Sources/EducationEnumerations.cpp
   Sources/EducationRestApi.cpp
