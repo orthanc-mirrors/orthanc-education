@@ -374,7 +374,7 @@
                           </tr>
                         </thead>
                         <tbody>
-                          <tr v-for="resource in projectForContent.resources" v-if="hasSubstring(resource.title, filter)">
+                          <tr v-for="resource in projectForContentResources" v-if="hasSubstring(resource.title, filter)">
                             <td><img class="img-fluid" style="max-width:96px; max-height:96px;" :src="resource.preview_url"></td>
                             <td>{{resource.level}}</td>
                             <td>

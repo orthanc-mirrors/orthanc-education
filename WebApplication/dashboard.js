@@ -34,6 +34,7 @@ var app = new Vue({
       projectIdForImages: '',
       projectIdForContent: '',
       projectForContent: {},
+      projectForContentResources: [],
       linkImage: '',
 
       modalModifyTextTitle: '',
@@ -230,14 +231,22 @@ var app = new Vue({
     },
 
     reloadProjectForContent: function() {
+      var projectId = this.projectIdForContent;
       var that = this;
       axios
-        .get('../api/projects/' + this.projectIdForContent)
+        .get('../api/projects/' + projectId)
         .then(function(response) {
-          that.projectForContent = response.data;
-          that.selectedViewer = response.data.primary_viewer;
-          that.filter = '';
-          that.linkImage = '';
+          axios
+            .post('../api/list-images', {
+              project: projectId
+            })
+            .then(function(resources) {
+              that.projectForContent = response.data;
+              that.selectedViewer = response.data.primary_viewer;
+              that.projectForContentResources = resources.data;
+              that.filter = '';
+              that.linkImage = '';
+            });
         });
     },
 

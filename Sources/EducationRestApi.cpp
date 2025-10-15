@@ -1490,7 +1490,7 @@ public:
 
   virtual bool Execute(std::unique_ptr<Orthanc::TemporaryFile>& upload,
                        SharedOutputBuffer& log,
-                       bool& stopped) = 0;
+                       const bool& stopped) = 0;
 };
 
 
@@ -1603,10 +1603,15 @@ public:
     }
   }
 
-  virtual Status GetStatus()
+  Status GetStatus()
   {
     boost::mutex::scoped_lock lock(mutex_);
     return status_;
+  }
+
+  void GetLog(std::string& log)
+  {
+    log_.GetContent(log);
   }
 };
 
@@ -1645,6 +1650,152 @@ private:
   bool         forceOpenSlide_;
   bool         reconstructPyramid_;
 
+  static bool Unzip(TemporaryDirectory& target,
+                    std::string& unzipMaster,
+                    const Orthanc::TemporaryFile& zip,
+                    const bool& stopped)
+  {
+    std::unique_ptr<Orthanc::ZipReader> reader(Orthanc::ZipReader::CreateFromFile(zip.GetPath()));
+
+    std::string filename, content;
+    while (reader->ReadNextFile(filename, content))
+    {
+      if (stopped)
+      {
+        return false;
+      }
+
+      // Ignore directories in the ZIP
+      if (!boost::ends_with(filename, "/"))
+      {
+        target.WriteFile(filename, content);
+
+        boost::filesystem::path path(target.GetPath(filename));
+
+        const std::string& extension = path.extension().string();
+
+        if (extension == ".mrxs" ||
+            extension == ".ndpi" ||
+            extension == ".scn" ||
+            extension == ".tif" ||
+            extension == ".tiff" ||
+            extension == ".png" ||
+            extension == ".jpg" ||
+            extension == ".jpeg")
+        {
+          if (unzipMaster.empty())
+          {
+            unzipMaster = path.string();
+          }
+          else
+          {
+            throw Orthanc::OrthancException(Orthanc::ErrorCode_BadFileFormat, "ZIP file containing multiple candidate whole-slide images");
+          }
+        }
+      }
+    }
+
+    if (unzipMaster.empty())
+    {
+      throw Orthanc::OrthancException(Orthanc::ErrorCode_BadFileFormat, "ZIP file containing no whole-slide image");
+    }
+
+    return true;
+  }
+
+  void PrepareArguments(std::list<std::string>& args) const
+  {
+    if (reconstructPyramid_)
+    {
+      args.push_back("--pyramid");
+      args.push_back("1");
+    }
+
+    if (forceOpenSlide_)
+    {
+      args.push_back("--force-openslide");
+      args.push_back("1");
+    }
+
+    args.push_back("--color");
+
+    {
+      char color[32];
+      sprintf(color, "%d,%d,%d", backgroundRed_, backgroundGreen_, backgroundBlue_);
+      args.push_back(color);
+    }
+
+    const std::string openslide = EducationConfiguration::GetInstance().GetPathToOpenSlide();
+    if (!openslide.empty())
+    {
+      args.push_back("--openslide");
+      args.push_back(openslide);
+    }
+  }
+
+  static bool ExecuteDicomizer(const std::string& dicomizer,
+                               const std::list<std::string>& args,
+                               SharedOutputBuffer& log,
+                               const bool& stopped)
+  {
+    ProcessRunner runner;
+    runner.Start(dicomizer, args, ProcessRunner::Stream_Error);
+
+    while (runner.IsRunning())
+    {
+      if (stopped)
+      {
+        runner.Terminate();
+        return false;
+      }
+
+      std::string s;
+      runner.Read(s);
+      log.Append(s);
+
+      boost::this_thread::sleep(boost::posix_time::milliseconds(100));
+    }
+
+    {
+      std::string s;
+      runner.Read(s);
+      log.Append(s);
+    }
+
+    return true;
+  }
+
+  static bool UploadDicomToOrthanc(const TemporaryDirectory& target,
+                                   const bool& stopped)
+  {
+    boost::filesystem::directory_iterator iterator(target.GetRoot());
+    boost::filesystem::directory_iterator end;
+
+    while (iterator != end)
+    {
+      if (stopped)
+      {
+        return false;
+      }
+
+      std::string content;
+      Orthanc::SystemToolbox::ReadFile(content, iterator->path());
+
+      if (!content.empty())
+      {
+        Json::Value answer;
+        if (!OrthancPlugins::RestApiPost(answer, "/instances", content.c_str(), content.size(), false))
+        {
+          throw Orthanc::OrthancException(Orthanc::ErrorCode_InternalError, "Cannot upload a DICOM-ized file");
+        }
+      }
+
+      ++iterator;
+    }
+
+    return true;
+  }
+
 public:
   WholeSlideImagingDicomization() :
     studyDescription_("Whole-slide image"),
@@ -1682,7 +1833,7 @@ public:
 
   virtual bool Execute(std::unique_ptr<Orthanc::TemporaryFile>& upload,
                        SharedOutputBuffer& log,
-                       bool& stopped) ORTHANC_OVERRIDE
+                       const bool& stopped) ORTHANC_OVERRIDE
   {
     assert(upload.get() != NULL);
 
@@ -1699,52 +1850,13 @@ public:
     {
       unzip.reset(new TemporaryDirectory);
 
-      std::unique_ptr<Orthanc::ZipReader> reader(Orthanc::ZipReader::CreateFromFile(upload->GetPath()));
-
-      std::string filename, content;
-      while (reader->ReadNextFile(filename, content))
+      if (!Unzip(*unzip, unzipMaster, *upload, stopped))
       {
-        if (stopped)
-        {
-          return false;
-        }
-
-        // Ignore directories in the ZIP
-        if (!boost::ends_with(filename, "/"))
-        {
-          unzip->WriteFile(filename, content);
-
-          boost::filesystem::path path(unzip->GetPath(filename));
-
-          const std::string& extension = path.extension().string();
-
-          if (extension == ".mrxs" ||
-              extension == ".ndpi" ||
-              extension == ".scn" ||
-              extension == ".tif" ||
-              extension == ".tiff" ||
-              extension == ".png" ||
-              extension == ".jpg" ||
-              extension == ".jpeg")
-          {
-            if (unzipMaster.empty())
-            {
-              unzipMaster = path.string();
-            }
-            else
-            {
-              throw Orthanc::OrthancException(Orthanc::ErrorCode_BadFileFormat, "ZIP file containing multiple candidate whole-slide images");
-            }
-          }
-        }
+        return false;
       }
 
-      if (unzipMaster.empty())
-      {
-        throw Orthanc::OrthancException(Orthanc::ErrorCode_BadFileFormat, "ZIP file containing no whole-slide image");
-      }
-
-      upload.reset(NULL);  // We don't need the ZIP file anymore
+      // We don't need the ZIP file anymore
+      upload.reset(NULL);
     }
 
     Orthanc::TemporaryFile dataset;
@@ -1759,6 +1871,10 @@ public:
     }
 
     std::list<std::string> args;
+    PrepareArguments(args);
+
+    args.push_back("--dataset");
+    args.push_back(dataset.GetPath().string());
 
     if (unzip.get() == NULL)
     {
@@ -1769,96 +1885,19 @@ public:
       args.push_back(unzipMaster);
     }
 
-    args.push_back("--dataset");
-    args.push_back(dataset.GetPath().string());
-
-    if (reconstructPyramid_)
-    {
-      args.push_back("--pyramid");
-      args.push_back("1");
-    }
-
-    if (forceOpenSlide_)
-    {
-      args.push_back("--force-openslide");
-      args.push_back("1");
-    }
-
-    args.push_back("--color");
-
-    {
-      char color[32];
-      sprintf(color, "%d,%d,%d", backgroundRed_, backgroundGreen_, backgroundBlue_);
-      args.push_back(color);
-    }
-
-    const std::string openslide = EducationConfiguration::GetInstance().GetPathToOpenSlide();
-    if (!openslide.empty())
-    {
-      args.push_back("--openslide");
-      args.push_back(openslide);
-    }
-
     std::unique_ptr<TemporaryDirectory> target(new TemporaryDirectory);
     args.push_back("--folder");
     args.push_back(target->GetRoot().string());
 
+    if (!ExecuteDicomizer(dicomizer, args, log, stopped))
     {
-      ProcessRunner runner;
-      runner.Start(dicomizer, args, ProcessRunner::Stream_Error);
-
-      int i = 0;
-      while (runner.IsRunning())
-      {
-        if (stopped)
-        {
-          runner.Terminate();
-          return false;
-        }
-
-        std::string s;
-        runner.Read(s);
-        log.Append(s);
-
-        boost::this_thread::sleep(boost::posix_time::milliseconds(100));
-      }
-
-      {
-        std::string s;
-        runner.Read(s);
-        log.Append(s);
-      }
+      return false;
     }
 
     unzip.reset(NULL);
     upload.reset(NULL);
 
-    boost::filesystem::directory_iterator iterator(target->GetRoot());
-    boost::filesystem::directory_iterator end;
-
-    while (iterator != end)
-    {
-      if (stopped)
-      {
-        return false;
-      }
-
-      std::string content;
-      Orthanc::SystemToolbox::ReadFile(content, iterator->path());
-
-      if (!content.empty())
-      {
-        Json::Value answer;
-        if (!OrthancPlugins::RestApiPost(answer, "/instances", content.c_str(), content.size(), false))
-        {
-          throw Orthanc::OrthancException(Orthanc::ErrorCode_InternalError, "Cannot upload a DICOM-ized file");
-        }
-      }
-
-      ++iterator;
-    }
-
-    return true;
+    return UploadDicomToOrthanc(*target, stopped);
   }
 };
 
@@ -1876,9 +1915,11 @@ void Dicomization(OrthancPluginRestOutput* output,
 
   const std::string uploadId = Orthanc::SerializationToolbox::ReadString(body, "upload-id");
 
+  std::unique_ptr<WholeSlideImagingDicomization> dicomization;
+
   try
   {
-    std::unique_ptr<WholeSlideImagingDicomization> dicomization(new WholeSlideImagingDicomization);
+    dicomization.reset(new WholeSlideImagingDicomization);
 
     const std::string color = Orthanc::SerializationToolbox::ReadString(body, "background-color");
     if (color == "black")
@@ -1897,18 +1938,19 @@ void Dicomization(OrthancPluginRestOutput* output,
     dicomization->SetStudyDescription(Orthanc::SerializationToolbox::ReadString(body, "study-description"));
     dicomization->SetForceOpenSlide(Orthanc::SerializationToolbox::ReadBoolean(body, "force-openslide"));
     dicomization->SetReconstructPyramid(Orthanc::SerializationToolbox::ReadBoolean(body, "reconstruct-pyramid"));
-
-    {
-      DicomizationThread t(uploadId, dicomization.release());
-      t.Start();
-    }
-
-    HttpToolbox::AnswerText(output, "");
   }
   catch (Orthanc::OrthancException&)
   {
     ActiveUploads::GetInstance().Erase(uploadId);
+    throw;
   }
+
+  {
+    DicomizationThread t(uploadId, dicomization.release());
+    t.Start();
+  }
+
+  HttpToolbox::AnswerText(output, "");
 }
 
 
