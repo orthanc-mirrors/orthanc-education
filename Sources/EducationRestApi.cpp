@@ -1481,10 +1481,10 @@ public:
 };
 
 
-class IDicomization : public boost::noncopyable
+class IDicomizer : public boost::noncopyable
 {
 public:
-  virtual ~IDicomization()
+  virtual ~IDicomizer()
   {
   }
 
@@ -1522,7 +1522,7 @@ static bool IsZipFile(const boost::filesystem::path& path)
 }
 
 
-class WholeSlideImagingDicomization : public IDicomization
+class WholeSlideImagingDicomizer : public IDicomizer
 {
 private:
   std::string  studyDescription_;
@@ -1679,7 +1679,7 @@ private:
   }
 
 public:
-  WholeSlideImagingDicomization() :
+  WholeSlideImagingDicomizer() :
     studyDescription_("Whole-slide image"),
     backgroundRed_(255),
     backgroundGreen_(255),
@@ -1800,7 +1800,7 @@ public:
 static Orthanc::JobsEngine engine_(100);
 
 
-class DicomizationJob : public Orthanc::IJob
+class DicomizerJob : public Orthanc::IJob
 {
 private:
   enum Status
@@ -1810,18 +1810,18 @@ private:
     Status_Failure
   };
 
-  std::string                     uploadId_;
-  std::unique_ptr<IDicomization>  dicomization_;
-  std::string                     name_;
-  std::string                     jobType_;
-  SharedOutputBuffer              log_;
-  boost::thread                   thread_;
-  bool                            stopped_;
+  std::string                  uploadId_;
+  std::unique_ptr<IDicomizer>  dicomizer_;
+  std::string                  name_;
+  std::string                  jobType_;
+  SharedOutputBuffer           log_;
+  boost::thread                thread_;
+  bool                         stopped_;
 
-  boost::mutex                    mutex_;   // To protect "status_"
-  Status                          status_;
+  boost::mutex                 mutex_;   // To protect "status_"
+  Status                       status_;
 
-  static void Worker(DicomizationJob* that)
+  static void Worker(DicomizerJob* that)
   {
     assert(that != NULL);
 
@@ -1844,7 +1844,7 @@ private:
 
     try
     {
-      success = that->dicomization_->Execute(upload, that->log_, that->stopped_);
+      success = that->dicomizer_->Execute(upload, that->log_, that->stopped_);
     }
     catch (Orthanc::OrthancException& e)
     {
@@ -1862,23 +1862,23 @@ private:
   }
 
 public:
-  DicomizationJob(const std::string& uploadId,
-                  IDicomization* dicomization) :
+  DicomizerJob(const std::string& uploadId,
+               IDicomizer* dicomizer) :
     uploadId_(uploadId),
-    dicomization_(dicomization),
+    dicomizer_(dicomizer),
     stopped_(false),
     status_(Status_Running)
   {
-    if (dicomization == NULL)
+    if (dicomizer == NULL)
     {
       throw Orthanc::OrthancException(Orthanc::ErrorCode_NullPointer);
     }
 
-    name_ = dicomization->GetName();
-    jobType_ = dicomization->GetJobType();
+    name_ = dicomizer->GetName();
+    jobType_ = dicomizer->GetJobType();
   }
 
-  virtual ~DicomizationJob()
+  virtual ~DicomizerJob()
   {
     if (thread_.joinable())
     {
@@ -1986,97 +1986,104 @@ public:
 void Dicomization(OrthancPluginRestOutput* output,
                   const std::string& url,
                   const OrthancPluginHttpRequest* request,
-                  const AuthenticatedUser& user,
-                  const Json::Value& body)
+                  const AuthenticatedUser& user)
 {
   assert(user.GetRole() == Role_Administrator);
 
-  const std::string uploadId = Orthanc::SerializationToolbox::ReadString(body, "upload-id");
-
-  std::unique_ptr<WholeSlideImagingDicomization> dicomization;
-
-  try
+  if (request->method == OrthancPluginHttpMethod_Get)
   {
-    dicomization.reset(new WholeSlideImagingDicomization);
+    std::set<std::string> jobs;
+    engine_.GetRegistry().ListJobs(jobs);
 
-    const std::string color = Orthanc::SerializationToolbox::ReadString(body, "background-color");
-    if (color == "black")
+    Json::Value answer = Json::arrayValue;
+
+    for (std::set<std::string>::const_iterator it = jobs.begin(); it != jobs.end(); ++it)
     {
-      dicomization->SetBackgroundColor(0, 0, 0);
+      Orthanc::JobInfo info;
+      if (engine_.GetRegistry().GetJobInfo(info, *it))
+      {
+        Json::Value item;
+        item["id"] = *it;
+        item["time"] = boost::posix_time::to_iso_string(info.GetCreationTime());
+        item["name"] = Orthanc::SerializationToolbox::ReadString(info.GetStatus().GetPublicContent(), "name");
+        item["type"] = info.GetStatus().GetJobType();
+        // item["log"] = Orthanc::SerializationToolbox::ReadString(info.GetStatus().GetPublicContent(), "log");
+
+        switch (info.GetState())
+        {
+          case Orthanc::JobState_Success:
+            item["status"] = "success";
+            break;
+
+          case Orthanc::JobState_Pending:
+            item["status"] = "pending";
+            break;
+
+          case Orthanc::JobState_Running:
+            item["status"] = "running";
+            break;
+
+          default:
+            item["status"] = "failure";
+            break;
+        }
+
+        answer.append(item);
+      }
     }
-    else if (color == "white")
+
+    HttpToolbox::AnswerJson(output, answer);
+  }
+  else if (request->method == OrthancPluginHttpMethod_Post)
+  {
+    Json::Value body;
+    if (!Orthanc::Toolbox::ReadJson(body, request->body, request->bodySize))
     {
-      dicomization->SetBackgroundColor(255, 255, 255);
+      throw Orthanc::OrthancException(Orthanc::ErrorCode_BadFileFormat);
     }
     else
     {
-      throw Orthanc::OrthancException(Orthanc::ErrorCode_ParameterOutOfRange);
-    }
+      const std::string uploadId = Orthanc::SerializationToolbox::ReadString(body, "upload-id");
 
-    dicomization->SetStudyDescription(Orthanc::SerializationToolbox::ReadString(body, "study-description"));
-    dicomization->SetForceOpenSlide(Orthanc::SerializationToolbox::ReadBoolean(body, "force-openslide"));
-    dicomization->SetReconstructPyramid(Orthanc::SerializationToolbox::ReadBoolean(body, "reconstruct-pyramid"));
-  }
-  catch (Orthanc::OrthancException&)
-  {
-    ActiveUploads::GetInstance().Erase(uploadId);
-    throw;
-  }
+      std::unique_ptr<WholeSlideImagingDicomizer> dicomizer;
 
-  engine_.GetRegistry().Submit(new DicomizationJob(uploadId, dicomization.release()), 0 /* priority */);
-
-  HttpToolbox::AnswerText(output, "");
-}
-
-
-void GetDicomizationStatus(OrthancPluginRestOutput* output,
-                           const std::string& url,
-                           const OrthancPluginHttpRequest* request,
-                           const AuthenticatedUser& user)
-{
-  assert(user.GetRole() == Role_Administrator);
-
-  std::set<std::string> jobs;
-  engine_.GetRegistry().ListJobs(jobs);
-
-  Json::Value answer = Json::arrayValue;
-
-  for (std::set<std::string>::const_iterator it = jobs.begin(); it != jobs.end(); ++it)
-  {
-    Orthanc::JobInfo info;
-    if (engine_.GetRegistry().GetJobInfo(info, *it))
-    {
-      Json::Value item;
-      item["id"] = *it;
-      item["time"] = boost::posix_time::to_iso_string(info.GetCreationTime());
-      item["name"] = Orthanc::SerializationToolbox::ReadString(info.GetStatus().GetPublicContent(), "name");
-      item["type"] = info.GetStatus().GetJobType();
-      // item["log"] = Orthanc::SerializationToolbox::ReadString(info.GetStatus().GetPublicContent(), "log");
-
-      switch (info.GetState())
+      try
       {
-      case Orthanc::JobState_Success:
-        item["status"] = "success";
-        break;
+        dicomizer.reset(new WholeSlideImagingDicomizer);
 
-      case Orthanc::JobState_Pending:
-        item["status"] = "pending";
-        break;
+        const std::string color = Orthanc::SerializationToolbox::ReadString(body, "background-color");
+        if (color == "black")
+        {
+          dicomizer->SetBackgroundColor(0, 0, 0);
+        }
+        else if (color == "white")
+        {
+          dicomizer->SetBackgroundColor(255, 255, 255);
+        }
+        else
+        {
+          throw Orthanc::OrthancException(Orthanc::ErrorCode_ParameterOutOfRange);
+        }
 
-      case Orthanc::JobState_Running:
-        item["status"] = "running";
-        break;
-
-      default:
-        item["status"] = "failure";
-        break;
+        dicomizer->SetStudyDescription(Orthanc::SerializationToolbox::ReadString(body, "study-description"));
+        dicomizer->SetForceOpenSlide(Orthanc::SerializationToolbox::ReadBoolean(body, "force-openslide"));
+        dicomizer->SetReconstructPyramid(Orthanc::SerializationToolbox::ReadBoolean(body, "reconstruct-pyramid"));
+      }
+      catch (Orthanc::OrthancException&)
+      {
+        ActiveUploads::GetInstance().Erase(uploadId);
+        throw;
       }
 
-      answer.append(item);
+      engine_.GetRegistry().Submit(new DicomizerJob(uploadId, dicomizer.release()), 0 /* priority */);
+
+      HttpToolbox::AnswerText(output, "");
     }
   }
-
-  HttpToolbox::AnswerJson(output, answer);
+  else
+  {
+    OrthancPluginSendMethodNotAllowed(OrthancPlugins::GetGlobalContext(), output, "GET,POST");
+  }
 }
 
 
@@ -2155,9 +2162,8 @@ void RegisterEducationRestApiRoutes()
   RestApiRouter::RegisterAdministratorRoute<SetLtiClientId>("/education/api/config/lti-client-id");
 
   RestApiRouter::RegisterAdministratorRoute<UploadFile>("/education/api/upload");
-  RestApiRouter::RegisterAdministratorPostRoute<Dicomization>("/education/api/dicomization");
-  RestApiRouter::RegisterAdministratorGetRoute<GetDicomizationStatus>("/education/api/dicomization-status");
-  RestApiRouter::RegisterAdministratorGetRoute<GetDicomizationLog>("/education/api/dicomization-log/{}");
+  RestApiRouter::RegisterAdministratorRoute<Dicomization>("/education/api/dicomization");
+  RestApiRouter::RegisterAdministratorGetRoute<GetDicomizationLog>("/education/api/dicomization/{}/log");
 
   engine_.SetWorkersCount(1);
   engine_.Start();
