@@ -1,0 +1,17 @@
+diff -r -urEb reproc-14.2.5.orig/reproc/src/macro.h reproc-14.2.5/reproc/src/macro.h
+--- reproc-14.2.5.orig/reproc/src/macro.h	2025-10-21 22:17:59.386258877 +0200
++++ reproc-14.2.5/reproc/src/macro.h	2025-10-21 22:37:53.283518598 +0200
+@@ -6,6 +6,13 @@
+ 
+ #if defined(_WIN32) && !defined(__MINGW32__)
+   #define THREAD_LOCAL __declspec(thread)
++#elif defined(__LSB_VERSION__)
++/**
++ * Linux Standard Base generates the following error if trying to use
++ * the thread local storage (TLS): "undefined reference to
++ * `__tls_get_addr'"
++ **/
++  #define THREAD_LOCAL
+ #else
+   #define THREAD_LOCAL __thread
+ #endif

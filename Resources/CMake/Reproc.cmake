@@ -20,10 +20,31 @@
 
 
 set(REPROC_SOURCES_DIR ${CMAKE_BINARY_DIR}/reproc-14.2.5)
+
+if (IS_DIRECTORY "${REPROC_SOURCES_DIR}")
+  set(FirstRun OFF)
+else()
+  set(FirstRun ON)
+endif()
+
 DownloadPackage(
   "9ea81a0c1eef6b8f76463d41a86e8ddd"
   "https://orthanc.uclouvain.be/downloads/third-party-downloads/reproc-14.2.5.tar.gz"
   "${REPROC_SOURCES_DIR}")
+
+if (FirstRun)
+  # Apply the patches
+  execute_process(
+    COMMAND ${PATCH_EXECUTABLE} -p0 -N -i
+    ${CMAKE_CURRENT_LIST_DIR}/Reproc.patch
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    RESULT_VARIABLE Failure
+    )
+
+  if (Failure)
+    message(FATAL_ERROR "Error while patching a file")
+  endif()
+endif()
 
 include_directories(${REPROC_SOURCES_DIR}/reproc/include/)
 
