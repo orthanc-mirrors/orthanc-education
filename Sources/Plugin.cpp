@@ -22,12 +22,13 @@
  **/
 
 
+#include "Dicomization/ActiveUploads.h"
+#include "EducationConfiguration.h"
 #include "EducationRestApi.h"
+#include "LTI/LTIRoutes.h"
 #include "OrthancDatabase.h"
 #include "ProjectPermissionContext.h"
 #include "RestApiRouter.h"
-#include "EducationConfiguration.h"
-#include "LTI/LTIRoutes.h"
 
 #include <EmbeddedResources.h>
 #include <SerializationToolbox.h>
@@ -412,8 +413,9 @@ static void UploadsCleaner()
     count = (count + 1) % 600;   // Run cleanup every 60 seconds (because we sleep 100 milliseconds)
     if (count == 0)
     {
-      printf("...\n");
+      ActiveUploads::GetInstance().RemoveExpired(60);  // Remove uploads inactive for more than 1 minute
     }
+
     boost::this_thread::sleep(boost::posix_time::milliseconds(100));
   }
 }
