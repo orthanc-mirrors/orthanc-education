@@ -29,6 +29,7 @@
 
 #include <OrthancException.h>
 #include <SerializationToolbox.h>
+#include <SystemToolbox.h>
 
 #include <boost/algorithm/string/predicate.hpp>
 
@@ -632,6 +633,34 @@ std::string EducationConfiguration::GenerateProjectId()
   }
 
   return boost::lexical_cast<std::string>(generated);
+}
+
+
+void EducationConfiguration::SetPathToWsiDicomizer(const std::string& path)
+{
+  boost::unique_lock<boost::shared_mutex> lock(mutex_);
+  pathWsiDicomizer_ = path;
+}
+
+
+std::string EducationConfiguration::GetPathToWsiDicomizer()
+{
+  boost::shared_lock<boost::shared_mutex> lock(mutex_);
+  return pathWsiDicomizer_;
+}
+
+
+void EducationConfiguration::SetPathToOpenSlide(const std::string& path)
+{
+  boost::unique_lock<boost::shared_mutex> lock(mutex_);
+  pathOpenSlide_ = path;
+}
+
+
+std::string EducationConfiguration::GetPathToOpenSlide()
+{
+  boost::shared_lock<boost::shared_mutex> lock(mutex_);
+  return pathOpenSlide_;
 }
 
 

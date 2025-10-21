@@ -59,7 +59,7 @@
             <button class="nav-link" id="pills-projects-tab" data-bs-toggle="pill" data-bs-target="#pills-projects" type="button" role="tab" aria-controls="pills-projects" aria-selected="false">Management of projects</button>
             <button class="nav-link" id="pills-images-tab" data-bs-toggle="pill" data-bs-target="#pills-images" type="button" role="tab" aria-controls="pills-images" aria-selected="false">Management of images</button>
             <button class="nav-link" id="pills-content-tab" data-bs-toggle="pill" data-bs-target="#pills-content" type="button" role="tab" aria-controls="pills-content" aria-selected="false">Content of projects</button>
-            <button class="nav-link" id="pills-upload-tab" data-bs-toggle="pill" data-bs-target="#pills-upload" type="button" role="tab" aria-controls="pills-upload" aria-selected="false">Upload whole-slide image</button>
+            <button class="nav-link" id="pills-dicomization-tab" data-bs-toggle="pill" data-bs-target="#pills-dicomization" type="button" role="tab" aria-controls="pills-dicomization" aria-selected="false">DICOM-ization of images</button>
             <button class="nav-link" id="pills-status-tab" data-bs-toggle="pill" data-bs-target="#pills-status" type="button" role="tab" aria-controls="pills-status" aria-selected="false">Upload status</button>
             <button class="nav-link" id="pills-settings-tab" data-bs-toggle="pill" data-bs-target="#pills-settings" type="button" role="tab" aria-controls="pills-settings" aria-selected="false">Settings</button>
           </ul>
@@ -195,8 +195,8 @@
                         <div class="col-sm-8">
                           <select class="form-select" id="selectedProjectForImages" v-model="projectIdForImages" >
                             <option value="_unused-studies" selected>[ DICOM studies without a project ]</option>
-                            <option value="_unused-series" selected>[ DICOM series without a project ]</option>
-                            <option value="_all-studies" selected>[ All DICOM studies ]</option>
+                            <option value="_unused-series">[ DICOM series without a project ]</option>
+                            <option value="_all-studies">[ All DICOM studies ]</option>
                             <option v-for="project in projects" :value="project.id">{{project.name}}</option>
                           </select>
                         </div>
@@ -374,7 +374,7 @@
                           </tr>
                         </thead>
                         <tbody>
-                          <tr v-for="resource in projectForContent.resources" v-if="hasSubstring(resource.title, filter)">
+                          <tr v-for="resource in projectForContentResources" v-if="hasSubstring(resource.title, filter)">
                             <td><img class="img-fluid" style="max-width:96px; max-height:96px;" :src="resource.preview_url"></td>
                             <td>{{resource.level}}</td>
                             <td>
@@ -410,23 +410,93 @@
               </div>
 
 
-              <div class="tab-pane" id="pills-upload" role="tabpanel" aria-labelledby="pills-upload-tab" tabindex="0">
-                <h1>Upload whole-slide image</h1>
+              <div class="tab-pane" id="pills-dicomization" role="tabpanel" aria-labelledby="pills-dicomization-tab" tabindex="0">
+                <h1>DICOM-ization of images</h1>
                 <p>&nbsp;</p>
 
                 <div class="row justify-content-center">
                   <div class="col-8">
+                    <form action="javascript:void(0);">
+                      <div class="row mb-3">
+                        <label for="dicomizationType" class="col-sm-4 col-form-label">Type of DICOM-ization:</label>
+                        <div class="col-sm-8">
+                          <select class="form-select" id="dicomizationType" v-model="dicomizationType" >
+                            <option value="wsi" v-if="config.has_wsi_dicomizer">Whole-slide imaging</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div class="mb-3" v-if="isUploadAvailable">
+                        <label for="dicomizationFile" class="form-label">File to upload:</label>
+                        <input class="form-control" type="file" id="dicomizationFile">
+                      </div>
+                      <div class="mb-3" v-if="isDicomizationWSI">
+                        <label for="dicomizationColor" class="form-label">Background color:&nbsp;&nbsp;</label>
+                        <select id="dicomizationColor" class="form-select" v-model="dicomizationBackgroundColor">
+                          <option value="white">White</option>
+                          <option value="black">Black</option>
+                        </select>
+                      </div>
+                      <div class="mb-3" v-if="isDicomizationWSI">
+                        <input class="form-check-input" type="checkbox" id="dicomizationOpenSlide" v-model="dicomizationOpenSlide">&nbsp;&nbsp;
+                        <label for="dicomizationOpenSlide" class="form-label">Force OpenSlide (slower, use if import does not succeed)</label>
+                      </div>
+                      <div class="mb-3" v-if="isDicomizationWSI">
+                        <input class="form-check-input" type="checkbox" id="dicomizationPyramid" v-model="dicomizationPyramid">&nbsp;&nbsp;
+                        <label for="dicomizationPyramid" class="form-label">Reconstruct pyramid (better, but may result in larger files)</label>
+                      </div>
+                      <p v-if="isUploadAvailable">
+                        <button v-if="!uploading" type="button" class="btn btn-lg btn-primary" @click="upload()">Upload</button>
+                        <button v-if="uploading" type="button" class="btn btn-lg btn-primary" disabled>Uploading: {{uploadProgress}} MB / {{uploadSize}} MB</button>
+                      </p>
+                    </form>
                   </div>
                 </div>
               </div>
 
 
               <div class="tab-pane" id="pills-status" role="tabpanel" aria-labelledby="pills-status-tab" tabindex="0">
-                <h1>Status of the uploads</h1>
+                <h1>Status of the DICOM-izations</h1>
                 <p>&nbsp;</p>
 
                 <div class="row justify-content-center">
                   <div class="col-8">
+
+                    <table class="table align-middle">
+                      <colgroup>
+                        <col style="width: 1%;">
+                        <col style="width: 1%;">
+                        <col style="width: 1%;">
+                        <col>
+                        <col style="width: 1%;">
+                      </colgroup>
+                      <thead>
+                        <tr>
+                          <th scope="col">Status</th>
+                          <th scope="col">Date</th>
+                          <th scope="col">Type</th>
+                          <th scope="col">Filename</th>
+                          <th scope="col">Logs</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-for="item in dicomizations">
+                          <td>
+                            <span class="badge bg-success" v-if="item.is_success">success</span>
+                            <span class="badge bg-danger" v-if="item.is_failure">failure</span>
+                            <span class="badge bg-secondary" v-if="!item.is_success && !item.is_failure">{{item.status.toLowerCase()}}</span>
+                          </td>
+                          <td class="text-nowrap">{{item.date}}</td>
+                          <td>{{item.type}}</td>
+                          <td>{{item.name}}</td>
+                          <td>
+                            <button class="btn btn-sm btn-primary ms-2">
+                              <i class="fa fa-file-text" @click="openLogs(item)"></i>
+                            </button>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+
                   </div>
                 </div>
               </div>
@@ -558,7 +628,7 @@
                             v-model="modalProjectParametersPolicy"
                             @change="changeProjectPolicy">
                       <option value="hidden">Hidden (only accessible to the instructors of the project)</option>
-                      <option value="active">Active (only accessible to registered learners)</option>
+                      <option value="active">Active (accessible to registered instructors and learners)</option>
                       <option value="public">Public (for MOOC with guest accounts)</option>
                     </select>
                   </div>

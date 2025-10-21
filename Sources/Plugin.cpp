@@ -22,18 +22,20 @@
  **/
 
 
+#include "Dicomization/ActiveUploads.h"
+#include "EducationConfiguration.h"
 #include "EducationRestApi.h"
+#include "LTI/LTIRoutes.h"
 #include "OrthancDatabase.h"
 #include "ProjectPermissionContext.h"
 #include "RestApiRouter.h"
-#include "EducationConfiguration.h"
-#include "LTI/LTIRoutes.h"
 
 #include <EmbeddedResources.h>
 #include <SerializationToolbox.h>
 #include <SystemToolbox.h>
 
 #include <boost/algorithm/string/predicate.hpp>
+#include <boost/thread.hpp>
 #include <cassert>
 
 
@@ -399,6 +401,27 @@ static OrthancPluginErrorCode HttpAuthentication(
 }
 
 
+static boost::thread  uploadsCleanerThread_;
+static bool           uploadsCleanerContinue_;
+
+static void UploadsCleaner()
+{
+  unsigned int count = 0;
+
+  while (uploadsCleanerContinue_)
+  {
+    count = (count + 1) % 600;   // Run cleanup every 60 seconds (because we sleep 100 milliseconds)
+    if (count == 0)
+    {
+      ActiveUploads::GetInstance().RemoveExpired(60);  // Remove uploads inactive for more than 1 minute
+    }
+
+    boost::this_thread::sleep(boost::posix_time::milliseconds(100));
+  }
+}
+
+
+
 static OrthancPluginErrorCode OnChangeCallback(OrthancPluginChangeType changeType,
                                                OrthancPluginResourceType resourceType,
                                                const char* resourceId)
@@ -453,6 +476,7 @@ static OrthancPluginErrorCode OnChangeCallback(OrthancPluginChangeType changeTyp
     }
 
     case OrthancPluginChangeType_OrthancStopped:
+      FinalizeEducationJobsEngine();
       break;
 
     default:
@@ -652,6 +676,16 @@ extern "C"
         }
       }
 
+      if (configEducation.LookupStringValue(s, "WholeSlideImagingDicomizer"))
+      {
+        EducationConfiguration::GetInstance().SetPathToWsiDicomizer(s);
+      }
+
+      if (configEducation.LookupStringValue(s, "OpenSlideLibrary"))
+      {
+        EducationConfiguration::GetInstance().SetPathToOpenSlide(s);
+      }
+
 
       // Serve the static assets. They cannot be served using
       // "RegisterPublicRoute()", as they might have an arbitrary depth.
@@ -699,6 +733,9 @@ extern "C"
 
         RegisterLTIRoutes();
       }
+
+      uploadsCleanerContinue_ = true;
+      uploadsCleanerThread_ = boost::thread(UploadsCleaner);
     }
     catch (Orthanc::OrthancException& e)
     {
@@ -713,6 +750,13 @@ extern "C"
   ORTHANC_PLUGINS_API void OrthancPluginFinalize()
   {
     LOG(WARNING) << "Finalizing the education plugin";
+
+    uploadsCleanerContinue_ = false;
+    if (uploadsCleanerThread_.joinable())
+    {
+      uploadsCleanerThread_.join();
+    }
+
     Orthanc::Toolbox::FinalizeOpenSsl();
     Orthanc::Logging::Finalize();
   }

@@ -34,6 +34,7 @@ var app = new Vue({
       projectIdForImages: '',
       projectIdForContent: '',
       projectForContent: {},
+      projectForContentResources: [],
       linkImage: '',
 
       modalModifyTextTitle: '',
@@ -66,7 +67,17 @@ var app = new Vue({
 
       // Variables that are used by multiple tabs
       filter: '',
-      selectedViewer: ''
+      selectedViewer: '',
+
+      // For DICOM-ization
+      dicomizations: [],
+      dicomizationType: '',
+      uploading: false,
+      uploadProgress: 0,
+      uploadSize: 0,
+      dicomizationBackgroundColor: 'white',
+      dicomizationOpenSlide: false,
+      dicomizationPyramid: true
     }
   },
 
@@ -77,6 +88,14 @@ var app = new Vue({
 
     projectViewers() {
       return this.projectForContent.secondary_viewers || '';
+    },
+
+    isUploadAvailable() {
+      return (this.dicomizationType !== '');
+    },
+
+    isDicomizationWSI() {
+      return (this.dicomizationType === 'wsi');
     }
   },
 
@@ -128,6 +147,10 @@ var app = new Vue({
 
     document.getElementById('pills-content-tab').addEventListener('shown.bs.tab', function (event) {
       that.projectIdForContent = '';
+    });
+
+    document.getElementById('pills-status-tab').addEventListener('shown.bs.tab', function (event) {
+      that.reloadDicomizations();
     });
 
     // Track the current tab in the hash of the URL
@@ -213,14 +236,22 @@ var app = new Vue({
     },
 
     reloadProjectForContent: function() {
+      var projectId = this.projectIdForContent;
       var that = this;
       axios
-        .get('../api/projects/' + this.projectIdForContent)
+        .get('../api/projects/' + projectId)
         .then(function(response) {
-          that.projectForContent = response.data;
-          that.selectedViewer = response.data.primary_viewer;
-          that.filter = '';
-          that.linkImage = '';
+          axios
+            .post('../api/list-images', {
+              project: projectId
+            })
+            .then(function(resources) {
+              that.projectForContent = response.data;
+              that.selectedViewer = response.data.primary_viewer;
+              that.projectForContentResources = resources.data;
+              that.filter = '';
+              that.linkImage = '';
+            });
         });
     },
 
@@ -485,6 +516,110 @@ var app = new Vue({
         }
         this.modalLinkImageWithProject.show();
       }
+    },
+
+    upload: function() {
+      var file = document.getElementById('dicomizationFile').files[0];
+      if (!file) {
+        alert('Please select a file first.');
+        return;
+      }
+
+      var chunkSize = 1 * 1024 * 1024; // 1 MB
+      var totalChunks = Math.ceil(file.size / chunkSize);
+      var uploadId = crypto.randomUUID();
+
+      this.uploading = true;
+      this.uploadProgress = 0;
+      this.uploadSize = Math.round(file.size / (1024 * 1024));
+
+      var dicomization = {
+        'upload-id': uploadId,
+        'type' : this.dicomizationType
+      }
+
+      if (this.dicomizationType == 'wsi') {
+        dicomization['background-color'] = this.dicomizationBackgroundColor;
+        dicomization['force-openslide'] = this.dicomizationOpenSlide;
+        dicomization['reconstruct-pyramid'] = this.dicomizationPyramid;
+        dicomization['study-description'] = file.name;
+      } else {
+        alert('Not implemented');
+        return;
+      }
+
+      var that = this;
+
+      function uploadChunk(currentChunk) {
+        if (currentChunk >= totalChunks) {
+          console.log('All chunks uploaded successfully!');
+
+          axios.post('../api/dicomization', dicomization)
+            .then(function(res) {
+              that.uploading = false;
+              console.log('Upload is now being DICOM-ized');
+            })
+            .catch(function(a) {
+              that.uploading = false;
+              alert('Upload has failed');
+            });
+
+        } else {
+
+          var start = currentChunk * chunkSize;
+          var end = Math.min(file.size, start + chunkSize);
+          var chunk = file.slice(start, end);
+
+          that.uploadProgress = Math.round(start / (1024 * 1024));
+
+          console.log('Uploading chunk ' + (currentChunk + 1) + ' of ' + totalChunks + '...');
+
+          axios.post('../api/upload', chunk, {
+            headers: {
+              'Content-Range': 'bytes ' + start + '-' + (end - 1) + '/' + file.size,
+              'Upload-Id': uploadId,
+              'Content-Type': 'application/octet-stream'
+            }
+          })
+            .then(function(res) {
+              uploadChunk(currentChunk + 1);
+            })
+            .catch(function() {
+              that.uploading = false;
+              alert('Upload has failed');
+            });
+        }
+      }
+
+      uploadChunk(0);
+    },
+
+    reloadDicomizations: function() {
+      var that = this;
+      axios
+        .get('../api/dicomization')
+        .then(function(response) {
+          that.dicomizations = response.data.sort((a, b) => {
+            if (a.time < b.time) {
+              return 1;
+            } else if (a.time > b.time) {
+              return -1;
+            } else {
+              return 0;
+            }
+          });
+
+          that.dicomizations.forEach((dicomization) => {
+            dicomization.date = new Date(dicomization.time + 'Z').toLocaleString();
+            dicomization.is_success = (dicomization.status === 'success');
+            dicomization.is_failure = (dicomization.status === 'failure');
+          });
+        });
+    },
+
+    openLogs: function(dicomization) {
+      var url = '../api/dicomization/' + dicomization.id + '/logs';
+      window.open(url, '_blank').focus();
     }
   }
 });

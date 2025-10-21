@@ -122,7 +122,7 @@ class Orthanc(unittest.TestCase):
         self.assertFalse('lti_project_id' in config['user'])
 
         self.assertEqual('stone', config['default_viewer'])
-        self.assertEqual(False, config['has_orthanc_explorer_2'])
+        self.assertTrue('has_orthanc_explorer_2' in config)
         self.assertEqual('education-', config['label_prefix'])
         self.assertEqual('', config['lti_client_id'])
         self.assertEqual(False, config['lti_enabled'])
@@ -743,6 +743,95 @@ class Orthanc(unittest.TestCase):
             'project' : project,
         }), headers = AdministratorHeaders()).json()
         self.assertEqual(0, len(lst))
+
+
+    def test_delete_project(self):
+        instance = self.create_test_instance_id()
+        study = requests.get(URL + '/instances/%s/study' % instance, headers = AdministratorHeaders()).json() ['ID']
+        series = requests.get(URL + '/instances/%s/series' % instance, headers = AdministratorHeaders()).json() ['ID']
+
+        project = requests.post(URL + '/education/api/projects', json.dumps({
+            'name' : 'Hello',
+            'description' : 'World',
+        }), headers = AdministratorHeaders()).json() ['id']
+
+        lst = requests.post(URL + '/education/api/list-images', json.dumps({
+            'project' : project,
+        }), headers = AdministratorHeaders()).json()
+        self.assertEqual(0, len(lst))
+
+        requests.post(URL + '/education/api/link', json.dumps({
+            'resource' : {
+                'resource-id' : study,
+                'level' : 'Study',
+            },
+            'project' : project,
+        }), headers = AdministratorHeaders()).raise_for_status()
+
+        requests.post(URL + '/education/api/link', json.dumps({
+            'resource' : {
+                'resource-id' : series,
+                'level' : 'Series',
+            },
+            'project' : project,
+        }), headers = AdministratorHeaders()).raise_for_status()
+
+        requests.post(URL + '/education/api/link', json.dumps({
+            'resource' : {
+                'resource-id' : instance,
+                'level' : 'Instance',
+            },
+            'project' : project,
+        }), headers = AdministratorHeaders()).raise_for_status()
+
+        labels = requests.get(URL + '/studies/%s/labels' % study, headers = AdministratorHeaders()).json()
+        self.assertEqual(1, len(labels))
+        self.assertTrue('education-%s' % project in labels)
+
+        labels = requests.get(URL + '/series/%s/labels' % series, headers = AdministratorHeaders()).json()
+        self.assertEqual(1, len(labels))
+        self.assertTrue('education-%s' % project in labels)
+
+        labels = requests.get(URL + '/instances/%s/labels' % instance, headers = AdministratorHeaders()).json()
+        self.assertEqual(1, len(labels))
+        self.assertTrue('education-%s' % project in labels)
+
+        lst = requests.post(URL + '/education/api/list-images', json.dumps({
+            'project' : '_all-studies'
+        }), headers = AdministratorHeaders()).json()
+        self.assertEqual(1, len(lst))
+
+        lst = requests.post(URL + '/education/api/list-images', json.dumps({
+            'project' : '_unused-studies'
+        }), headers = AdministratorHeaders()).json()
+        self.assertEqual(0, len(lst))
+
+        lst = requests.post(URL + '/education/api/list-images', json.dumps({
+            'project' : '_unused-series'
+        }), headers = AdministratorHeaders()).json()
+        self.assertEqual(0, len(lst))
+
+        lst = requests.post(URL + '/education/api/list-images', json.dumps({
+            'project' : project,
+        }), headers = AdministratorHeaders()).json()
+        self.assertEqual(3, len(lst))
+
+        requests.delete(URL + '/education/api/projects/%s' % project, headers = AdministratorHeaders()).raise_for_status()
+
+        lst = requests.post(URL + '/education/api/list-images', json.dumps({
+            'project' : '_all-studies'
+        }), headers = AdministratorHeaders()).json()
+        self.assertEqual(1, len(lst))
+
+        lst = requests.post(URL + '/education/api/list-images', json.dumps({
+            'project' : '_unused-studies'
+        }), headers = AdministratorHeaders()).json()
+        self.assertEqual(1, len(lst))
+
+        lst = requests.post(URL + '/education/api/list-images', json.dumps({
+            'project' : '_unused-series'
+        }), headers = AdministratorHeaders()).json()
+        self.assertEqual(1, len(lst))
 
 
 try:

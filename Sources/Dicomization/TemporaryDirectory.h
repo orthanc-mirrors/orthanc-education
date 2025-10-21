@@ -24,13 +24,32 @@
 
 #pragma once
 
-#include "HttpToolbox.h"
-#include "Permissions/AuthenticatedUser.h"
+#include <boost/noncopyable.hpp>
+#include <boost/filesystem.hpp>
 
 
-void RegisterEducationRestApiRoutes();
+class TemporaryDirectory : public boost::noncopyable
+{
+private:
+  boost::filesystem::path  root_;
 
-AuthenticatedUser* AuthenticateFromEducationCookie(const std::list<HttpToolbox::Cookie>& cookies);
+public:
+  TemporaryDirectory();
 
-void FinalizeEducationJobsEngine();
+  ~TemporaryDirectory();
 
+  const boost::filesystem::path& GetRoot() const
+  {
+    return root_;
+  }
+
+  boost::filesystem::path GetPath(const std::string& filename) const
+  {
+    return root_ / filename;
+  }
+
+  void Clear();
+
+  void WriteFile(const std::string& filename,
+                 const std::string& content);
+};

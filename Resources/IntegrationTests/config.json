@@ -20,5 +20,8 @@
     "PublicRoots" : [
       "http://my-public"
     ]
+  },
+  "OrthancExplorer2" : {
+    "IsDefaultOrthancUI" : false
   }
 }

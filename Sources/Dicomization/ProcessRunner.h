@@ -24,13 +24,43 @@
 
 #pragma once
 
-#include "HttpToolbox.h"
-#include "Permissions/AuthenticatedUser.h"
+#include <boost/noncopyable.hpp>
+#include <list>
+#include <reproc/reproc.h>
+#include <string>
 
+class ProcessRunner : public boost::noncopyable
+{
+public:
+  enum Stream
+  {
+    Stream_Output,
+    Stream_Error
+  };
 
-void RegisterEducationRestApiRoutes();
+private:
+  reproc_t       *process_;
+  bool            started_;
+  REPROC_STREAM   readFrom_;
+  int             exitCode_;
 
-AuthenticatedUser* AuthenticateFromEducationCookie(const std::list<HttpToolbox::Cookie>& cookies);
+public:
+  ProcessRunner();
 
-void FinalizeEducationJobsEngine();
+  ~ProcessRunner();
 
+  void Start(const std::string& command,
+             const std::list<std::string>& args,
+             Stream readFrom);
+
+  void Read(std::string& data);
+
+  bool IsRunning();
+
+  void Terminate();
+
+  int GetExitCode() const
+  {
+    return exitCode_;
+  }
+};

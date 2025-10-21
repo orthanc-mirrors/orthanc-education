@@ -70,6 +70,9 @@ private:
 
   unsigned int           sequenceProjectIds_;
 
+  std::string            pathWsiDicomizer_;
+  std::string            pathOpenSlide_;
+
   EducationConfiguration();
 
   void SaveToGlobalPropertyUnsafe();
@@ -173,6 +176,14 @@ public:
   void ListAvailableViewers(std::set<ViewerType>& target);
 
   std::string GenerateProjectId();
+
+  void SetPathToWsiDicomizer(const std::string& path);
+
+  std::string GetPathToWsiDicomizer();
+
+  void SetPathToOpenSlide(const std::string& path);
+
+  std::string GetPathToOpenSlide();
 
   AuthenticatedUser* DoLoginAuthentication(const std::string& username,
                                            const std::string& password);

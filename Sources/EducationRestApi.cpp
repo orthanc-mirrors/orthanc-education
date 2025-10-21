@@ -24,6 +24,9 @@
 
 #include "EducationRestApi.h"
 
+#include "Dicomization/ActiveUploads.h"
+#include "Dicomization/ProcessRunner.h"
+#include "Dicomization/TemporaryDirectory.h"
 #include "EducationConfiguration.h"
 #include "LTI/LTIRoutes.h"
 #include "OrthancDatabase.h"
@@ -35,9 +38,11 @@
 #include <MultiThreading/Semaphore.h>
 #include <SerializationToolbox.h>
 #include <SystemToolbox.h>
+#include <TemporaryFile.h>
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/math/special_functions/round.hpp>
+#include <boost/regex.hpp>
 #include <cassert>
 
 
@@ -243,19 +248,19 @@ static const char* const GetHomepage(Role role)
 {
   switch (role)
   {
-  case Role_Administrator:
-    // Redirect to the dashboard if the user is already logged as an administrator
-    return "education/app/dashboard.html";
+    case Role_Administrator:
+      // Redirect to the dashboard if the user is already logged as an administrator
+      return "education/app/dashboard.html";
 
-  case Role_Standard:
-    return "education/app/list-projects.html";
+    case Role_Standard:
+      return "education/app/list-projects.html";
 
-  case Role_Guest:
-    // By default, redirect to the login page
-    return "education/app/login.html";
+    case Role_Guest:
+      // By default, redirect to the login page
+      return "education/app/login.html";
 
-  default:
-    throw Orthanc::OrthancException(Orthanc::ErrorCode_ParameterOutOfRange);
+    default:
+      throw Orthanc::OrthancException(Orthanc::ErrorCode_ParameterOutOfRange);
   }
 }
 
@@ -282,6 +287,7 @@ void ServeConfiguration(OrthancPluginRestOutput* output,
   {
     // This information is available to "dashboard.html", but not to "list-projects.html"
     config["has_orthanc_explorer_2"] = EducationConfiguration::GetInstance().HasPluginOrthancExplorer2();
+    config["has_wsi_dicomizer"] = !EducationConfiguration::GetInstance().GetPathToWsiDicomizer().empty();
     config["lti_enabled"] = EducationConfiguration::GetInstance().IsLtiEnabled();
     config["lti_client_id"] = EducationConfiguration::GetInstance().GetLtiClientId();
     config["lti_platform_url"] = EducationConfiguration::GetInstance().GetLtiPlatformUrl();
@@ -596,14 +602,14 @@ static void ResizeThumbnail(OrthancPlugins::OrthancImage& target,
   unsigned int offsetY = (target.GetHeight() - thumbnail.GetHeight()) / 2;
 
   Orthanc::ImageAccessor targetAccessor;
-  targetAccessor.AssignWritable(thumbnail.GetFormat(), target.GetWidth(), target.GetHeight(), target.GetPitch(), target.GetBuffer());
+  targetAccessor.AssignWritable(Orthanc::PixelFormat_RGB24, target.GetWidth(), target.GetHeight(), target.GetPitch(), target.GetBuffer());
 
   Orthanc::ImageAccessor region;
   targetAccessor.GetRegion(region, offsetX, offsetY, thumbnail.GetWidth(), thumbnail.GetHeight());
 
   Orthanc::ImageAccessor thumbnailAccessor;
   thumbnail.GetAccessor(thumbnailAccessor);
-  Orthanc::ImageProcessing::Copy(region, thumbnailAccessor);
+  Orthanc::ImageProcessing::Convert(region, thumbnailAccessor);
 }
 
 
@@ -751,7 +757,7 @@ void GeneratePreview(OrthancPluginRestOutput* output,
     }
 
     OrthancPlugins::OrthancImage thumbnail(OrthancPluginPixelFormat_RGB24, THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT);
-    memset(thumbnail.GetBuffer(), 128, thumbnail.GetWidth() * thumbnail.GetHeight());
+    memset(thumbnail.GetBuffer(), 255, thumbnail.GetPitch() * thumbnail.GetHeight());
 
     if (success)
     {
@@ -1188,6 +1194,702 @@ void SetLtiClientId(OrthancPluginRestOutput* output,
 }
 
 
+void UploadFile(OrthancPluginRestOutput* output,
+                const std::string& url,
+                const OrthancPluginHttpRequest* request,
+                const AuthenticatedUser& user)
+{
+  assert(user.GetRole() == Role_Administrator);
+
+  if (request->method != OrthancPluginHttpMethod_Post)
+  {
+    OrthancPluginSendMethodNotAllowed(OrthancPlugins::GetGlobalContext(), output, "POST");
+  }
+  else
+  {
+    std::map<std::string, std::string> headers;
+    HttpToolbox::ConvertDictionaryFromC(headers, true, request->headersCount, request->headersKeys, request->headersValues);
+
+    std::string uploadId, range;
+    if (HttpToolbox::LookupHttpHeader(uploadId, headers, "upload-id") &&
+        HttpToolbox::LookupHttpHeader(range, headers, "content-range"))
+    {
+      boost::regex pattern("bytes ([0-9]+)-([0-9]+)/([0-9]+)");
+      boost::smatch what;
+
+      uint64_t start, end, fileSize;
+      if (!regex_match(range, what, pattern) ||
+          !Orthanc::SerializationToolbox::ParseUnsignedInteger64(start, what[1]) ||
+          !Orthanc::SerializationToolbox::ParseUnsignedInteger64(end, what[2]) ||
+          !Orthanc::SerializationToolbox::ParseUnsignedInteger64(fileSize, what[3]))
+      {
+        throw Orthanc::OrthancException(Orthanc::ErrorCode_BadRequest);
+      }
+      else
+      {
+        ActiveUploads::GetInstance().AppendChunk(uploadId, start, end, fileSize, request->body, request->bodySize);
+        HttpToolbox::AnswerText(output, "");
+      }
+    }
+    else
+    {
+      throw Orthanc::OrthancException(Orthanc::ErrorCode_BadRequest);
+    }
+  }
+}
+
+
+class SharedOutputBuffer : public boost::noncopyable
+{
+private:
+  boost::mutex   mutex_;
+  std::string    content_;
+
+public:
+  void Append(const std::string& data)
+  {
+    boost::mutex::scoped_lock lock(mutex_);
+    content_ += data;
+  }
+
+  void GetContent(std::string& content)
+  {
+    boost::mutex::scoped_lock lock(mutex_);
+    content  = content_;
+  }
+};
+
+
+class IDicomizer : public boost::noncopyable
+{
+public:
+  virtual ~IDicomizer()
+  {
+  }
+
+  virtual std::string GetName() = 0;
+
+  virtual std::string GetJobType() = 0;
+
+  virtual bool Execute(std::unique_ptr<Orthanc::TemporaryFile>& upload,
+                       SharedOutputBuffer& logs,
+                       const bool& stopped) = 0;
+};
+
+
+
+#include <Compression/ZipReader.h>
+
+
+static bool IsZipFile(const boost::filesystem::path& path)
+{
+  std::string header;
+  Orthanc::SystemToolbox::ReadFileRange(header, path, 0, 4, false /* don't throw exception */);
+
+  if (header.size() != 4)
+  {
+    return false;
+  }
+  else
+  {
+    // https://en.wikipedia.org/wiki/List_of_file_signatures
+    const uint8_t *b = reinterpret_cast<const uint8_t*>(header.c_str());
+    return ((b[0] == 0x50 && b[1] == 0x4b && b[2] == 0x03 && b[3] == 0x04) ||
+            (b[0] == 0x50 && b[1] == 0x4b && b[2] == 0x05 && b[3] == 0x06) ||
+            (b[0] == 0x50 && b[1] == 0x4b && b[2] == 0x07 && b[3] == 0x08));
+  }
+}
+
+
+class WholeSlideImagingDicomizer : public IDicomizer
+{
+private:
+  std::string  studyDescription_;
+  uint8_t      backgroundRed_;
+  uint8_t      backgroundGreen_;
+  uint8_t      backgroundBlue_;
+  bool         forceOpenSlide_;
+  bool         reconstructPyramid_;
+
+  static bool Unzip(TemporaryDirectory& target,
+                    std::string& unzipMaster,
+                    const Orthanc::TemporaryFile& zip,
+                    const bool& stopped)
+  {
+    std::unique_ptr<Orthanc::ZipReader> reader(Orthanc::ZipReader::CreateFromFile(zip.GetPath()));
+
+    std::string filename, content;
+    while (reader->ReadNextFile(filename, content))
+    {
+      if (stopped)
+      {
+        return false;
+      }
+
+      // Ignore directories in the ZIP
+      if (!boost::ends_with(filename, "/"))
+      {
+        target.WriteFile(filename, content);
+
+        boost::filesystem::path path(target.GetPath(filename));
+
+        const std::string& extension = path.extension().string();
+
+        if (extension == ".mrxs" ||
+            extension == ".ndpi" ||
+            extension == ".scn" ||
+            extension == ".tif" ||
+            extension == ".tiff" ||
+            extension == ".png" ||
+            extension == ".jpg" ||
+            extension == ".jpeg")
+        {
+          if (unzipMaster.empty())
+          {
+            unzipMaster = path.string();
+          }
+          else
+          {
+            throw Orthanc::OrthancException(Orthanc::ErrorCode_BadFileFormat, "ZIP file containing multiple candidate whole-slide images");
+          }
+        }
+      }
+    }
+
+    if (unzipMaster.empty())
+    {
+      throw Orthanc::OrthancException(Orthanc::ErrorCode_BadFileFormat, "ZIP file containing no whole-slide image");
+    }
+
+    return true;
+  }
+
+  void PrepareArguments(std::list<std::string>& args) const
+  {
+    if (reconstructPyramid_)
+    {
+      args.push_back("--pyramid");
+      args.push_back("1");
+    }
+
+    if (forceOpenSlide_)
+    {
+      args.push_back("--force-openslide");
+      args.push_back("1");
+    }
+
+    args.push_back("--color");
+
+    {
+      char color[32];
+      sprintf(color, "%d,%d,%d", backgroundRed_, backgroundGreen_, backgroundBlue_);
+      args.push_back(color);
+    }
+
+    const std::string openslide = EducationConfiguration::GetInstance().GetPathToOpenSlide();
+    if (!openslide.empty())
+    {
+      args.push_back("--openslide");
+      args.push_back(openslide);
+    }
+  }
+
+  static bool ExecuteDicomizer(const std::string& dicomizer,
+                               const std::list<std::string>& args,
+                               SharedOutputBuffer& logs,
+                               const bool& stopped)
+  {
+    ProcessRunner runner;
+    runner.Start(dicomizer, args, ProcessRunner::Stream_Error);
+
+    while (runner.IsRunning())
+    {
+      if (stopped)
+      {
+        runner.Terminate();
+        return false;
+      }
+
+      std::string s;
+      runner.Read(s);
+      logs.Append(s);
+
+      boost::this_thread::sleep(boost::posix_time::milliseconds(100));
+    }
+
+    {
+      std::string s;
+      runner.Read(s);
+      logs.Append(s);
+    }
+
+    return (runner.GetExitCode() == 0);
+  }
+
+  static bool UploadDicomToOrthanc(const TemporaryDirectory& target,
+                                   const bool& stopped)
+  {
+    boost::filesystem::directory_iterator iterator(target.GetRoot());
+    boost::filesystem::directory_iterator end;
+
+    while (iterator != end)
+    {
+      if (stopped)
+      {
+        return false;
+      }
+
+      std::string content;
+      Orthanc::SystemToolbox::ReadFile(content, iterator->path());
+
+      if (!content.empty())
+      {
+        Json::Value answer;
+        if (!OrthancPlugins::RestApiPost(answer, "/instances", content.c_str(), content.size(), false))
+        {
+          throw Orthanc::OrthancException(Orthanc::ErrorCode_InternalError, "Cannot upload a DICOM-ized file");
+        }
+      }
+
+      ++iterator;
+    }
+
+    return true;
+  }
+
+public:
+  WholeSlideImagingDicomizer() :
+    studyDescription_("Whole-slide image"),
+    backgroundRed_(255),
+    backgroundGreen_(255),
+    backgroundBlue_(255),
+    forceOpenSlide_(false),
+    reconstructPyramid_(true)
+  {
+  }
+
+  void SetStudyDescription(const std::string& studyDescription)
+  {
+    studyDescription_ = studyDescription;
+  }
+
+  void SetBackgroundColor(uint8_t red,
+                          uint8_t green,
+                          uint8_t blue)
+  {
+    backgroundRed_ = red;
+    backgroundGreen_ = green;
+    backgroundBlue_ = blue;
+  }
+
+  void SetForceOpenSlide(bool force)
+  {
+    forceOpenSlide_ = force;
+  }
+
+  void SetReconstructPyramid(bool reconstruct)
+  {
+    reconstructPyramid_ = reconstruct;
+  }
+
+  virtual std::string GetName() ORTHANC_OVERRIDE
+  {
+    return studyDescription_;
+  }
+
+  virtual std::string GetJobType() ORTHANC_OVERRIDE
+  {
+    return "wsi";
+  }
+
+  virtual bool Execute(std::unique_ptr<Orthanc::TemporaryFile>& upload,
+                       SharedOutputBuffer& logs,
+                       const bool& stopped) ORTHANC_OVERRIDE
+  {
+    assert(upload.get() != NULL);
+
+    const std::string dicomizer = EducationConfiguration::GetInstance().GetPathToWsiDicomizer();
+    if (dicomizer.empty())
+    {
+      throw Orthanc::OrthancException(Orthanc::ErrorCode_BadFileFormat, "No DICOM-izer is configured for whole-slide images");
+    }
+
+    std::unique_ptr<TemporaryDirectory> unzip;
+    std::string unzipMaster;
+
+    if (IsZipFile(upload->GetPath()))
+    {
+      unzip.reset(new TemporaryDirectory);
+
+      if (!Unzip(*unzip, unzipMaster, *upload, stopped))
+      {
+        return false;
+      }
+
+      // We don't need the ZIP file anymore
+      upload.reset(NULL);
+    }
+
+    Orthanc::TemporaryFile dataset;
+
+    {
+      Json::Value json;
+      json["StudyDescription"] = studyDescription_;
+
+      std::string s;
+      Orthanc::Toolbox::WriteFastJson(s, json);
+      dataset.Write(s);
+    }
+
+    std::list<std::string> args;
+    PrepareArguments(args);
+
+    args.push_back("--dataset");
+    args.push_back(dataset.GetPath().string());
+
+    if (unzip.get() == NULL)
+    {
+      args.push_back(upload->GetPath().string());
+    }
+    else
+    {
+      args.push_back(unzipMaster);
+    }
+
+    std::unique_ptr<TemporaryDirectory> target(new TemporaryDirectory);
+    args.push_back("--folder");
+    args.push_back(target->GetRoot().string());
+
+    if (!ExecuteDicomizer(dicomizer, args, logs, stopped))
+    {
+      return false;
+    }
+
+    unzip.reset(NULL);
+    upload.reset(NULL);
+
+    return UploadDicomToOrthanc(*target, stopped);
+  }
+};
+
+
+
+#include <JobsEngine/JobsEngine.h>
+
+static Orthanc::JobsEngine engine_(20);  // Only keep 20 completed jobs
+
+
+class DicomizerJob : public Orthanc::IJob
+{
+private:
+  enum Status
+  {
+    Status_Running,
+    Status_Success,
+    Status_Failure
+  };
+
+  std::string                  uploadId_;
+  std::unique_ptr<IDicomizer>  dicomizer_;
+  std::string                  name_;
+  std::string                  jobType_;
+  SharedOutputBuffer           logs_;
+  boost::thread                thread_;
+  bool                         stopped_;
+
+  boost::mutex                 mutex_;   // To protect "status_"
+  Status                       status_;
+
+  static void Worker(DicomizerJob* that)
+  {
+    assert(that != NULL);
+
+    std::unique_ptr<Orthanc::TemporaryFile> upload;
+
+    try
+    {
+      upload.reset(ActiveUploads::GetInstance().ReleaseTemporaryFile(that->uploadId_));
+    }
+    catch (Orthanc::OrthancException&)
+    {
+      boost::mutex::scoped_lock lock(that->mutex_);
+      that->status_ = Status_Failure;
+      return;
+    }
+
+    assert(upload.get() != NULL);
+
+    bool success;
+
+    try
+    {
+      success = that->dicomizer_->Execute(upload, that->logs_, that->stopped_);
+    }
+    catch (Orthanc::OrthancException& e)
+    {
+      success = false;
+    }
+    catch (...)
+    {
+      success = false;
+    }
+
+    {
+      boost::mutex::scoped_lock lock(that->mutex_);
+      that->status_ = (success ? Status_Success : Status_Failure);
+    }
+  }
+
+public:
+  DicomizerJob(const std::string& uploadId,
+               IDicomizer* dicomizer) :
+    uploadId_(uploadId),
+    dicomizer_(dicomizer),
+    stopped_(false),
+    status_(Status_Running)
+  {
+    if (dicomizer == NULL)
+    {
+      throw Orthanc::OrthancException(Orthanc::ErrorCode_NullPointer);
+    }
+
+    name_ = dicomizer->GetName();
+    jobType_ = dicomizer->GetJobType();
+  }
+
+  virtual ~DicomizerJob()
+  {
+    if (thread_.joinable())
+    {
+      thread_.join();
+    }
+  }
+
+  virtual void Start() ORTHANC_OVERRIDE
+  {
+    thread_ = boost::thread(Worker, this);
+  }
+
+  virtual Orthanc::JobStepResult Step(const std::string& jobId) ORTHANC_OVERRIDE
+  {
+    boost::this_thread::sleep(boost::posix_time::milliseconds(100));
+
+    {
+      boost::mutex::scoped_lock lock(mutex_);
+      if (status_ == Status_Success ||
+          status_ == Status_Failure)
+      {
+        return (status_ == Status_Success ?
+                Orthanc::JobStepResult::Success() :
+                Orthanc::JobStepResult::Failure(Orthanc::ErrorCode_InternalError, ""));
+      }
+    }
+
+    return Orthanc::JobStepResult::Continue();
+  }
+
+  virtual void Reset() ORTHANC_OVERRIDE
+  {
+    throw Orthanc::OrthancException(Orthanc::ErrorCode_NotImplemented);
+  }
+
+  virtual void Stop(Orthanc::JobStopReason reason) ORTHANC_OVERRIDE
+  {
+    if (reason == Orthanc::JobStopReason_Canceled)
+    {
+      stopped_ = true;
+    }
+
+    if (thread_.joinable())
+    {
+      thread_.join();
+    }
+  }
+
+  virtual float GetProgress() const ORTHANC_OVERRIDE
+  {
+    return 0;
+  }
+
+  virtual void GetJobType(std::string& target) const ORTHANC_OVERRIDE
+  {
+    target = jobType_;
+  }
+
+  virtual void GetPublicContent(Json::Value& value) const ORTHANC_OVERRIDE
+  {
+    std::string logs;
+    const_cast<SharedOutputBuffer&>(logs_).GetContent(logs);
+
+    value = Json::objectValue;
+    value["logs"] = logs;
+    value["name"] = name_;
+  }
+
+  virtual bool Serialize(Json::Value& value) const ORTHANC_OVERRIDE
+  {
+    return false;
+  }
+
+  virtual bool GetOutput(std::string& output,
+                         Orthanc::MimeType& mime,
+                         std::string& filename,
+                         const std::string& key) ORTHANC_OVERRIDE
+  {
+    throw Orthanc::OrthancException(Orthanc::ErrorCode_NotImplemented);
+  }
+
+  virtual bool DeleteOutput(const std::string& key) ORTHANC_OVERRIDE
+  {
+    throw Orthanc::OrthancException(Orthanc::ErrorCode_NotImplemented);
+  }
+
+  virtual void DeleteAllOutputs() ORTHANC_OVERRIDE
+  {
+    throw Orthanc::OrthancException(Orthanc::ErrorCode_NotImplemented);
+  }
+
+  virtual bool GetUserData(Json::Value& userData) const ORTHANC_OVERRIDE
+  {
+    return false;
+  }
+
+  virtual void SetUserData(const Json::Value& userData) ORTHANC_OVERRIDE
+  {
+    throw Orthanc::OrthancException(Orthanc::ErrorCode_NotImplemented);
+  }
+};
+
+
+
+void Dicomization(OrthancPluginRestOutput* output,
+                  const std::string& url,
+                  const OrthancPluginHttpRequest* request,
+                  const AuthenticatedUser& user)
+{
+  assert(user.GetRole() == Role_Administrator);
+
+  if (request->method == OrthancPluginHttpMethod_Get)
+  {
+    std::set<std::string> jobs;
+    engine_.GetRegistry().ListJobs(jobs);
+
+    Json::Value answer = Json::arrayValue;
+
+    for (std::set<std::string>::const_iterator it = jobs.begin(); it != jobs.end(); ++it)
+    {
+      Orthanc::JobInfo info;
+      if (engine_.GetRegistry().GetJobInfo(info, *it))
+      {
+        Json::Value item;
+        item["id"] = *it;
+        item["time"] = boost::posix_time::to_iso_extended_string(info.GetCreationTime());
+        item["name"] = Orthanc::SerializationToolbox::ReadString(info.GetStatus().GetPublicContent(), "name");
+        item["type"] = info.GetStatus().GetJobType();
+
+        switch (info.GetState())
+        {
+          case Orthanc::JobState_Success:
+            item["status"] = "success";
+            break;
+
+          case Orthanc::JobState_Pending:
+            item["status"] = "pending";
+            break;
+
+          case Orthanc::JobState_Running:
+            item["status"] = "running";
+            break;
+
+          default:
+            item["status"] = "failure";
+            break;
+        }
+
+        answer.append(item);
+      }
+    }
+
+    HttpToolbox::AnswerJson(output, answer);
+  }
+  else if (request->method == OrthancPluginHttpMethod_Post)
+  {
+    Json::Value body;
+    if (!Orthanc::Toolbox::ReadJson(body, request->body, request->bodySize))
+    {
+      throw Orthanc::OrthancException(Orthanc::ErrorCode_BadFileFormat);
+    }
+    else
+    {
+      const std::string uploadId = Orthanc::SerializationToolbox::ReadString(body, "upload-id");
+
+      std::unique_ptr<WholeSlideImagingDicomizer> dicomizer;
+
+      try
+      {
+        dicomizer.reset(new WholeSlideImagingDicomizer);
+
+        const std::string color = Orthanc::SerializationToolbox::ReadString(body, "background-color");
+        if (color == "black")
+        {
+          dicomizer->SetBackgroundColor(0, 0, 0);
+        }
+        else if (color == "white")
+        {
+          dicomizer->SetBackgroundColor(255, 255, 255);
+        }
+        else
+        {
+          throw Orthanc::OrthancException(Orthanc::ErrorCode_ParameterOutOfRange);
+        }
+
+        dicomizer->SetStudyDescription(Orthanc::SerializationToolbox::ReadString(body, "study-description"));
+        dicomizer->SetForceOpenSlide(Orthanc::SerializationToolbox::ReadBoolean(body, "force-openslide"));
+        dicomizer->SetReconstructPyramid(Orthanc::SerializationToolbox::ReadBoolean(body, "reconstruct-pyramid"));
+      }
+      catch (Orthanc::OrthancException&)
+      {
+        ActiveUploads::GetInstance().Erase(uploadId);
+        throw;
+      }
+
+      engine_.GetRegistry().Submit(new DicomizerJob(uploadId, dicomizer.release()), 0 /* priority */);
+
+      HttpToolbox::AnswerText(output, "");
+    }
+  }
+  else
+  {
+    OrthancPluginSendMethodNotAllowed(OrthancPlugins::GetGlobalContext(), output, "GET,POST");
+  }
+}
+
+
+void GetDicomizationLogs(OrthancPluginRestOutput* output,
+                         const std::string& url,
+                         const OrthancPluginHttpRequest* request,
+                         const AuthenticatedUser& user)
+{
+  assert(user.GetRole() == Role_Administrator);
+
+  const std::string jobId(request->groups[0]);
+
+  Orthanc::JobInfo info;
+  if (engine_.GetRegistry().GetJobInfo(info, jobId))
+  {
+    std::string logs = Orthanc::SerializationToolbox::ReadString(info.GetStatus().GetPublicContent(), "logs");
+    HttpToolbox::AnswerText(output, logs);
+  }
+  else
+  {
+    throw Orthanc::OrthancException(Orthanc::ErrorCode_UnknownResource);
+  }
+}
+
+
+
+
+
 void RegisterEducationRestApiRoutes()
 {
   /**
@@ -1236,6 +1938,13 @@ void RegisterEducationRestApiRoutes()
   RestApiRouter::RegisterAdministratorRoute<HandleProjectsConfiguration>("/education/api/projects");
   RestApiRouter::RegisterAdministratorRoute<HandleSingleProject>("/education/api/projects/{}");
   RestApiRouter::RegisterAdministratorRoute<SetLtiClientId>("/education/api/config/lti-client-id");
+
+  RestApiRouter::RegisterAdministratorRoute<UploadFile>("/education/api/upload");
+  RestApiRouter::RegisterAdministratorRoute<Dicomization>("/education/api/dicomization");
+  RestApiRouter::RegisterAdministratorGetRoute<GetDicomizationLogs>("/education/api/dicomization/{}/logs");
+
+  engine_.SetWorkersCount(1);
+  engine_.Start();
 }
 
 
@@ -1256,4 +1965,10 @@ AuthenticatedUser* AuthenticateFromEducationCookie(const std::list<HttpToolbox::
   }
 
   return NULL;
+}
+
+
+void FinalizeEducationJobsEngine()
+{
+  engine_.Stop();
 }

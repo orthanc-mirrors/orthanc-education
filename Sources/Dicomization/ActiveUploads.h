@@ -24,13 +24,45 @@
 
 #pragma once
 
-#include "HttpToolbox.h"
-#include "Permissions/AuthenticatedUser.h"
+#include <TemporaryFile.h>
+
+#include <boost/thread/mutex.hpp>
 
 
-void RegisterEducationRestApiRoutes();
+class ActiveUploads : public boost::noncopyable
+{
+private:
+  class Upload;
 
-AuthenticatedUser* AuthenticateFromEducationCookie(const std::list<HttpToolbox::Cookie>& cookies);
+  typedef std::map<std::string, Upload*>  Content;
 
-void FinalizeEducationJobsEngine();
+  boost::mutex   mutex_;
+  Content        content_;
 
+  void EraseInternal(const std::string& uploadId);
+
+  static void ClearInternal(Content content);
+
+public:
+  static ActiveUploads& GetInstance();
+
+  ~ActiveUploads()
+  {
+    ClearInternal(content_);
+  }
+
+  void Clear();
+
+  void Erase(const std::string& uploadId);
+
+  void AppendChunk(const std::string& uploadId,
+                   uint64_t start,
+                   uint64_t end,
+                   uint64_t fileSize,
+                   const void* chunk,
+                   size_t chunkSize);
+
+  Orthanc::TemporaryFile* ReleaseTemporaryFile(const std::string& uploadId);
+
+  void RemoveExpired(unsigned int maxSeconds);
+};
