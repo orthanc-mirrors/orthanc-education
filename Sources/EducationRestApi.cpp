@@ -602,14 +602,14 @@ static void ResizeThumbnail(OrthancPlugins::OrthancImage& target,
   unsigned int offsetY = (target.GetHeight() - thumbnail.GetHeight()) / 2;
 
   Orthanc::ImageAccessor targetAccessor;
-  targetAccessor.AssignWritable(thumbnail.GetFormat(), target.GetWidth(), target.GetHeight(), target.GetPitch(), target.GetBuffer());
+  targetAccessor.AssignWritable(Orthanc::PixelFormat_RGB24, target.GetWidth(), target.GetHeight(), target.GetPitch(), target.GetBuffer());
 
   Orthanc::ImageAccessor region;
   targetAccessor.GetRegion(region, offsetX, offsetY, thumbnail.GetWidth(), thumbnail.GetHeight());
 
   Orthanc::ImageAccessor thumbnailAccessor;
   thumbnail.GetAccessor(thumbnailAccessor);
-  Orthanc::ImageProcessing::Copy(region, thumbnailAccessor);
+  Orthanc::ImageProcessing::Convert(region, thumbnailAccessor);
 }
 
 
@@ -757,7 +757,7 @@ void GeneratePreview(OrthancPluginRestOutput* output,
     }
 
     OrthancPlugins::OrthancImage thumbnail(OrthancPluginPixelFormat_RGB24, THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT);
-    memset(thumbnail.GetBuffer(), 128, thumbnail.GetWidth() * thumbnail.GetHeight());
+    memset(thumbnail.GetBuffer(), 255, thumbnail.GetPitch() * thumbnail.GetHeight());
 
     if (success)
     {
