@@ -28,6 +28,7 @@
 
 #include <boost/iostreams/device/file_descriptor.hpp>
 #include <boost/iostreams/stream.hpp>
+#include <fstream>
 
 
 static boost::posix_time::ptime GetNow()
