@@ -1,3 +1,16 @@
+diff -r -urEb reproc-14.2.5.orig/reproc/src/error.windows.c reproc-14.2.5/reproc/src/error.windows.c
+--- reproc-14.2.5.orig/reproc/src/error.windows.c	2025-10-21 22:17:59.386258877 +0200
++++ reproc-14.2.5/reproc/src/error.windows.c	2025-10-21 22:50:15.322957140 +0200
+@@ -8,8 +8,8 @@
+ 
+ #include <limits.h>
+ #include <stdlib.h>
+-#include <windows.h>
+ #include <winsock2.h>
++#include <windows.h>
+ 
+ #include <reproc/reproc.h>
+ 
 diff -r -urEb reproc-14.2.5.orig/reproc/src/macro.h reproc-14.2.5/reproc/src/macro.h
 --- reproc-14.2.5.orig/reproc/src/macro.h	2025-10-21 22:17:59.386258877 +0200
 +++ reproc-14.2.5/reproc/src/macro.h	2025-10-21 22:37:53.283518598 +0200
@@ -15,3 +28,16 @@ diff -r -urEb reproc-14.2.5.orig/reproc/src/macro.h reproc-14.2.5/reproc/src/mac
  #else
    #define THREAD_LOCAL __thread
  #endif
+diff -r -urEb reproc-14.2.5.orig/reproc/src/pipe.windows.c reproc-14.2.5/reproc/src/pipe.windows.c
+--- reproc-14.2.5.orig/reproc/src/pipe.windows.c	2025-10-21 22:17:59.386258877 +0200
++++ reproc-14.2.5/reproc/src/pipe.windows.c	2025-10-21 22:50:04.247023847 +0200
+@@ -8,8 +8,8 @@
+ 
+ #include <limits.h>
+ #include <stdlib.h>
+-#include <windows.h>
+ #include <winsock2.h>
++#include <windows.h>
+ 
+ #include "error.h"
+ #include "handle.h"
