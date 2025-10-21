@@ -34,6 +34,7 @@
 #include <SystemToolbox.h>
 
 #include <boost/algorithm/string/predicate.hpp>
+#include <boost/thread.hpp>
 #include <cassert>
 
 
@@ -399,6 +400,26 @@ static OrthancPluginErrorCode HttpAuthentication(
 }
 
 
+static boost::thread  uploadsCleanerThread_;
+static bool           uploadsCleanerContinue_;
+
+static void UploadsCleaner()
+{
+  unsigned int count = 0;
+
+  while (uploadsCleanerContinue_)
+  {
+    count = (count + 1) % 600;   // Run cleanup every 60 seconds (because we sleep 100 milliseconds)
+    if (count == 0)
+    {
+      printf("...\n");
+    }
+    boost::this_thread::sleep(boost::posix_time::milliseconds(100));
+  }
+}
+
+
+
 static OrthancPluginErrorCode OnChangeCallback(OrthancPluginChangeType changeType,
                                                OrthancPluginResourceType resourceType,
                                                const char* resourceId)
@@ -710,6 +731,9 @@ extern "C"
 
         RegisterLTIRoutes();
       }
+
+      uploadsCleanerContinue_ = true;
+      uploadsCleanerThread_ = boost::thread(UploadsCleaner);
     }
     catch (Orthanc::OrthancException& e)
     {
@@ -724,6 +748,13 @@ extern "C"
   ORTHANC_PLUGINS_API void OrthancPluginFinalize()
   {
     LOG(WARNING) << "Finalizing the education plugin";
+
+    uploadsCleanerContinue_ = false;
+    if (uploadsCleanerThread_.joinable())
+    {
+      uploadsCleanerThread_.join();
+    }
+
     Orthanc::Toolbox::FinalizeOpenSsl();
     Orthanc::Logging::Finalize();
   }

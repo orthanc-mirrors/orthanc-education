@@ -1197,18 +1197,25 @@ void SetLtiClientId(OrthancPluginRestOutput* output,
 class ActiveUploads : public boost::noncopyable
 {
 private:
+  static boost::posix_time::ptime GetNow()
+  {
+    return boost::posix_time::second_clock::local_time();
+  }
+
   class Upload : public boost::noncopyable
   {
   private:
     std::unique_ptr<Orthanc::TemporaryFile>  file_;
     uint64_t                                 pos_;
     uint64_t                                 fileSize_;
+    boost::posix_time::ptime                 lastUpdate_;
 
   public:
     Upload(uint64_t fileSize) :
       file_(new Orthanc::TemporaryFile),
       pos_(0),
-      fileSize_(fileSize)
+      fileSize_(fileSize),
+      lastUpdate_(GetNow())
     {
     }
 
@@ -1268,6 +1275,7 @@ private:
           if (good)
           {
             pos_ += static_cast<uint64_t>(size);
+            lastUpdate_ = GetNow();
             return true;
           }
           else
@@ -1284,6 +1292,11 @@ private:
 
         return false;
       }
+    }
+
+    bool HasExpired(unsigned int maxAgeSeconds) const
+    {
+      return (GetNow() - lastUpdate_).total_seconds() > maxAgeSeconds;
     }
   };
 
@@ -1306,6 +1319,19 @@ private:
     }
   }
 
+  static void ClearInternal(Content content)
+  {
+    for (Content::iterator it = content.begin(); it != content.end(); ++it)
+    {
+      if (it->second != NULL)
+      {
+        delete it->second;
+      }
+    }
+
+    content.clear();
+  }
+
 public:
   static ActiveUploads& GetInstance()
   {
@@ -1315,20 +1341,13 @@ public:
 
   ~ActiveUploads()
   {
-    Clear();
+    ClearInternal(content_);
   }
 
   void Clear()
   {
     boost::mutex::scoped_lock lock(mutex_);
-
-    for (Content::iterator it = content_.begin(); it != content_.end(); ++it)
-    {
-      assert(it->second != NULL);
-      delete it->second;
-    }
-
-    content_.clear();
+    ClearInternal(content_);
   }
 
   void Erase(const std::string& uploadId)
@@ -1411,6 +1430,38 @@ public:
         return file.release();
       }
     }
+  }
+
+
+  void RemoveExpired(unsigned int maxSeconds)
+  {
+    boost::mutex::scoped_lock lock(mutex_);
+
+    Content newContent;
+
+    try
+    {
+      for (Content::iterator it = content_.begin(); it != content_.end(); ++it)
+      {
+        assert(it->second != NULL);
+        if (it->second->HasExpired(maxSeconds))
+        {
+          delete it->second;
+        }
+        else
+        {
+          newContent[it->first] = it->second;
+          it->second = NULL;
+        }
+      }
+    }
+    catch (Orthanc::OrthancException&)
+    {
+      ClearInternal(newContent);
+      throw;
+    }
+
+    content_ = newContent;
   }
 };
 
@@ -2007,7 +2058,6 @@ void Dicomization(OrthancPluginRestOutput* output,
         item["time"] = boost::posix_time::to_iso_extended_string(info.GetCreationTime());
         item["name"] = Orthanc::SerializationToolbox::ReadString(info.GetStatus().GetPublicContent(), "name");
         item["type"] = info.GetStatus().GetJobType();
-        // item["logs"] = Orthanc::SerializationToolbox::ReadString(info.GetStatus().GetPublicContent(), "logs");
 
         switch (info.GetState())
         {
