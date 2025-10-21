@@ -455,11 +455,48 @@
 
 
               <div class="tab-pane" id="pills-status" role="tabpanel" aria-labelledby="pills-status-tab" tabindex="0">
-                <h1>Status of the uploads</h1>
+                <h1>Status of the DICOM-izations</h1>
                 <p>&nbsp;</p>
 
                 <div class="row justify-content-center">
                   <div class="col-8">
+
+                    <table class="table align-middle">
+                      <colgroup>
+                        <col style="width: 1%;">
+                        <col style="width: 1%;">
+                        <col style="width: 1%;">
+                        <col>
+                        <col style="width: 1%;">
+                      </colgroup>
+                      <thead>
+                        <tr>
+                          <th scope="col">Status</th>
+                          <th scope="col">Date</th>
+                          <th scope="col">Type</th>
+                          <th scope="col">Filename</th>
+                          <th scope="col">Logs</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-for="item in dicomizations">
+                          <td>
+                            <span class="badge bg-success" v-if="item.is_success">success</span>
+                            <span class="badge bg-danger" v-if="item.is_failure">failure</span>
+                            <span class="badge bg-secondary" v-if="!item.is_success && !item.is_failure">{{item.status.toLowerCase()}}</span>
+                          </td>
+                          <td class="text-nowrap">{{item.date}}</td>
+                          <td>{{item.type}}</td>
+                          <td>{{item.name}}</td>
+                          <td>
+                            <button class="btn btn-sm btn-primary ms-2">
+                              <i class="fa fa-file-text" @click="openLogs(item)"></i>
+                            </button>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+
                   </div>
                 </div>
               </div>

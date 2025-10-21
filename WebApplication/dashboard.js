@@ -70,6 +70,7 @@ var app = new Vue({
       selectedViewer: '',
 
       // For DICOM-ization
+      dicomizations: [],
       dicomizationType: 'wsi',
       uploading: false,
       uploadProgress: 0,
@@ -146,6 +147,10 @@ var app = new Vue({
 
     document.getElementById('pills-content-tab').addEventListener('shown.bs.tab', function (event) {
       that.projectIdForContent = '';
+    });
+
+    document.getElementById('pills-status-tab').addEventListener('shown.bs.tab', function (event) {
+      that.reloadDicomizations();
     });
 
     // Track the current tab in the hash of the URL
@@ -587,6 +592,34 @@ var app = new Vue({
       }
 
       uploadChunk(0);
+    },
+
+    reloadDicomizations: function() {
+      var that = this;
+      axios
+        .get('../api/dicomization')
+        .then(function(response) {
+          that.dicomizations = response.data.sort((a, b) => {
+            if (a.time < b.time) {
+              return 1;
+            } else if (a.time > b.time) {
+              return -1;
+            } else {
+              return 0;
+            }
+          });
+
+          that.dicomizations.forEach((dicomization) => {
+            dicomization.date = new Date(dicomization.time + 'Z').toLocaleString();
+            dicomization.is_success = (dicomization.status === 'success');
+            dicomization.is_failure = (dicomization.status === 'failure');
+          });
+        });
+    },
+
+    openLogs: function(dicomization) {
+      var url = '../api/dicomization/' + dicomization.id + '/logs';
+      window.open(url, '_blank').focus();
     }
   }
 });

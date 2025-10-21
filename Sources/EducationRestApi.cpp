@@ -1493,7 +1493,7 @@ public:
   virtual std::string GetJobType() = 0;
 
   virtual bool Execute(std::unique_ptr<Orthanc::TemporaryFile>& upload,
-                       SharedOutputBuffer& log,
+                       SharedOutputBuffer& logs,
                        const bool& stopped) = 0;
 };
 
@@ -1617,7 +1617,7 @@ private:
 
   static bool ExecuteDicomizer(const std::string& dicomizer,
                                const std::list<std::string>& args,
-                               SharedOutputBuffer& log,
+                               SharedOutputBuffer& logs,
                                const bool& stopped)
   {
     ProcessRunner runner;
@@ -1633,7 +1633,7 @@ private:
 
       std::string s;
       runner.Read(s);
-      log.Append(s);
+      logs.Append(s);
 
       boost::this_thread::sleep(boost::posix_time::milliseconds(100));
     }
@@ -1641,7 +1641,7 @@ private:
     {
       std::string s;
       runner.Read(s);
-      log.Append(s);
+      logs.Append(s);
     }
 
     return (runner.GetExitCode() == 0);
@@ -1724,7 +1724,7 @@ public:
   }
 
   virtual bool Execute(std::unique_ptr<Orthanc::TemporaryFile>& upload,
-                       SharedOutputBuffer& log,
+                       SharedOutputBuffer& logs,
                        const bool& stopped) ORTHANC_OVERRIDE
   {
     assert(upload.get() != NULL);
@@ -1781,7 +1781,7 @@ public:
     args.push_back("--folder");
     args.push_back(target->GetRoot().string());
 
-    if (!ExecuteDicomizer(dicomizer, args, log, stopped))
+    if (!ExecuteDicomizer(dicomizer, args, logs, stopped))
     {
       return false;
     }
@@ -1797,7 +1797,7 @@ public:
 
 #include <JobsEngine/JobsEngine.h>
 
-static Orthanc::JobsEngine engine_(100);
+static Orthanc::JobsEngine engine_(20);  // Only keep 20 completed jobs
 
 
 class DicomizerJob : public Orthanc::IJob
@@ -1814,7 +1814,7 @@ private:
   std::unique_ptr<IDicomizer>  dicomizer_;
   std::string                  name_;
   std::string                  jobType_;
-  SharedOutputBuffer           log_;
+  SharedOutputBuffer           logs_;
   boost::thread                thread_;
   bool                         stopped_;
 
@@ -1844,7 +1844,7 @@ private:
 
     try
     {
-      success = that->dicomizer_->Execute(upload, that->log_, that->stopped_);
+      success = that->dicomizer_->Execute(upload, that->logs_, that->stopped_);
     }
     catch (Orthanc::OrthancException& e)
     {
@@ -1939,11 +1939,11 @@ public:
 
   virtual void GetPublicContent(Json::Value& value) const ORTHANC_OVERRIDE
   {
-    std::string log;
-    const_cast<SharedOutputBuffer&>(log_).GetContent(log);
+    std::string logs;
+    const_cast<SharedOutputBuffer&>(logs_).GetContent(logs);
 
     value = Json::objectValue;
-    value["log"] = log;
+    value["logs"] = logs;
     value["name"] = name_;
   }
 
@@ -2004,10 +2004,10 @@ void Dicomization(OrthancPluginRestOutput* output,
       {
         Json::Value item;
         item["id"] = *it;
-        item["time"] = boost::posix_time::to_iso_string(info.GetCreationTime());
+        item["time"] = boost::posix_time::to_iso_extended_string(info.GetCreationTime());
         item["name"] = Orthanc::SerializationToolbox::ReadString(info.GetStatus().GetPublicContent(), "name");
         item["type"] = info.GetStatus().GetJobType();
-        // item["log"] = Orthanc::SerializationToolbox::ReadString(info.GetStatus().GetPublicContent(), "log");
+        // item["logs"] = Orthanc::SerializationToolbox::ReadString(info.GetStatus().GetPublicContent(), "logs");
 
         switch (info.GetState())
         {
@@ -2087,10 +2087,10 @@ void Dicomization(OrthancPluginRestOutput* output,
 }
 
 
-void GetDicomizationLog(OrthancPluginRestOutput* output,
-                        const std::string& url,
-                        const OrthancPluginHttpRequest* request,
-                        const AuthenticatedUser& user)
+void GetDicomizationLogs(OrthancPluginRestOutput* output,
+                         const std::string& url,
+                         const OrthancPluginHttpRequest* request,
+                         const AuthenticatedUser& user)
 {
   assert(user.GetRole() == Role_Administrator);
 
@@ -2099,8 +2099,8 @@ void GetDicomizationLog(OrthancPluginRestOutput* output,
   Orthanc::JobInfo info;
   if (engine_.GetRegistry().GetJobInfo(info, jobId))
   {
-    std::string log = Orthanc::SerializationToolbox::ReadString(info.GetStatus().GetPublicContent(), "log");
-    HttpToolbox::AnswerText(output, log);
+    std::string logs = Orthanc::SerializationToolbox::ReadString(info.GetStatus().GetPublicContent(), "logs");
+    HttpToolbox::AnswerText(output, logs);
   }
   else
   {
@@ -2163,7 +2163,7 @@ void RegisterEducationRestApiRoutes()
 
   RestApiRouter::RegisterAdministratorRoute<UploadFile>("/education/api/upload");
   RestApiRouter::RegisterAdministratorRoute<Dicomization>("/education/api/dicomization");
-  RestApiRouter::RegisterAdministratorGetRoute<GetDicomizationLog>("/education/api/dicomization/{}/log");
+  RestApiRouter::RegisterAdministratorGetRoute<GetDicomizationLogs>("/education/api/dicomization/{}/logs");
 
   engine_.SetWorkersCount(1);
   engine_.Start();
