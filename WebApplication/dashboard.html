@@ -421,7 +421,7 @@
                         <label for="dicomizationType" class="col-sm-4 col-form-label">Type of DICOM-ization:</label>
                         <div class="col-sm-8">
                           <select class="form-select" id="dicomizationType" v-model="dicomizationType" >
-                            <option value="wsi">Whole-slide imaging</option>
+                            <option value="wsi" v-if="config.has_wsi_dicomizer">Whole-slide imaging</option>
                           </select>
                         </div>
                       </div>

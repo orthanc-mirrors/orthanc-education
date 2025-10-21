@@ -287,6 +287,7 @@ void ServeConfiguration(OrthancPluginRestOutput* output,
   {
     // This information is available to "dashboard.html", but not to "list-projects.html"
     config["has_orthanc_explorer_2"] = EducationConfiguration::GetInstance().HasPluginOrthancExplorer2();
+    config["has_wsi_dicomizer"] = !EducationConfiguration::GetInstance().GetPathToWsiDicomizer().empty();
     config["lti_enabled"] = EducationConfiguration::GetInstance().IsLtiEnabled();
     config["lti_client_id"] = EducationConfiguration::GetInstance().GetLtiClientId();
     config["lti_platform_url"] = EducationConfiguration::GetInstance().GetLtiPlatformUrl();
@@ -1507,7 +1508,7 @@ public:
   {
     assert(upload.get() != NULL);
 
-    const std::string dicomizer = EducationConfiguration::GetInstance().GetPathToDicomizer();
+    const std::string dicomizer = EducationConfiguration::GetInstance().GetPathToWsiDicomizer();
     if (dicomizer.empty())
     {
       throw Orthanc::OrthancException(Orthanc::ErrorCode_BadFileFormat, "No DICOM-izer is configured for whole-slide images");

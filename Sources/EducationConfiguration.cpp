@@ -636,17 +636,17 @@ std::string EducationConfiguration::GenerateProjectId()
 }
 
 
-void EducationConfiguration::SetPathToDicomizer(const std::string& path)
+void EducationConfiguration::SetPathToWsiDicomizer(const std::string& path)
 {
   boost::unique_lock<boost::shared_mutex> lock(mutex_);
-  pathDicomizer_ = path;
+  pathWsiDicomizer_ = path;
 }
 
 
-std::string EducationConfiguration::GetPathToDicomizer()
+std::string EducationConfiguration::GetPathToWsiDicomizer()
 {
   boost::shared_lock<boost::shared_mutex> lock(mutex_);
-  return pathDicomizer_;
+  return pathWsiDicomizer_;
 }
 
 

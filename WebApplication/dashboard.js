@@ -71,7 +71,7 @@ var app = new Vue({
 
       // For DICOM-ization
       dicomizations: [],
-      dicomizationType: 'wsi',
+      dicomizationType: '',
       uploading: false,
       uploadProgress: 0,
       uploadSize: 0,
@@ -91,11 +91,11 @@ var app = new Vue({
     },
 
     isUploadAvailable() {
-      return (this.dicomizationType == 'wsi');
+      return (this.dicomizationType !== '');
     },
 
     isDicomizationWSI() {
-      return (this.dicomizationType == 'wsi');
+      return (this.dicomizationType === 'wsi');
     }
   },
 

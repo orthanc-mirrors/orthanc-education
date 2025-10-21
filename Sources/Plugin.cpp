@@ -676,12 +676,12 @@ extern "C"
         }
       }
 
-      if (configEducation.LookupStringValue(s, "Dicomizer"))
+      if (configEducation.LookupStringValue(s, "WholeSlideImagingDicomizer"))
       {
-        EducationConfiguration::GetInstance().SetPathToDicomizer(s);
+        EducationConfiguration::GetInstance().SetPathToWsiDicomizer(s);
       }
 
-      if (configEducation.LookupStringValue(s, "OpenSlide"))
+      if (configEducation.LookupStringValue(s, "OpenSlideLibrary"))
       {
         EducationConfiguration::GetInstance().SetPathToOpenSlide(s);
       }

@@ -70,7 +70,7 @@ private:
 
   unsigned int           sequenceProjectIds_;
 
-  std::string            pathDicomizer_;
+  std::string            pathWsiDicomizer_;
   std::string            pathOpenSlide_;
 
   EducationConfiguration();
@@ -177,9 +177,9 @@ public:
 
   std::string GenerateProjectId();
 
-  void SetPathToDicomizer(const std::string& path);
+  void SetPathToWsiDicomizer(const std::string& path);
 
-  std::string GetPathToDicomizer();
+  std::string GetPathToWsiDicomizer();
 
   void SetPathToOpenSlide(const std::string& path);
 
