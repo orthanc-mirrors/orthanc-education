@@ -140,7 +140,7 @@ var app = new Vue({
 
     document.getElementById('pills-images-tab').addEventListener('shown.bs.tab', function (event) {
       that.reloadProjectsParameters();
-      that.projectIdForImages = '_no-project';
+      that.projectIdForImages = '';
       that.filter = '';
       that.selectedViewer = that.config.default_viewer;
     });
