@@ -967,6 +967,12 @@ class Orthanc(unittest.TestCase):
 
 
     def test_create_free_link(self):
+        def Link(project, data):
+            requests.post(URL + '/education/api/link', json.dumps({
+                'data' : data,
+                'project' : project,
+            }), headers = AdministratorHeaders()).raise_for_status()
+
         def CheckNoResource(project):
             lst = requests.get(URL + '/education/api/user-projects', headers = AdministratorHeaders()).json()
             self.assertEqual(0, len(lst['projects'][project]['resources']))
@@ -1002,11 +1008,7 @@ class Orthanc(unittest.TestCase):
 
         CheckNoResource(project)
 
-        requests.post(URL + '/education/api/link', json.dumps({
-            'data' : study,
-            'project' : project,
-        }), headers = AdministratorHeaders()).raise_for_status()
-
+        Link(project, study)
         resource = CheckHasResource(project, 'Study', study)
         self.assertEqual('TEST - MY^STUDY', resource['title'])
         self.assertEqual([ project ], resource['projects'])
@@ -1016,11 +1018,7 @@ class Orthanc(unittest.TestCase):
         self.assertEqual('../api/preview-study/%s' % study, resource['preview_url'])
         Unlink(project)
 
-        requests.post(URL + '/education/api/link', json.dumps({
-            'data' : series,
-            'project' : project,
-        }), headers = AdministratorHeaders()).raise_for_status()
-
+        Link(project, series)
         resource = CheckHasResource(project, 'Series', series)
         self.assertEqual('TEST - MY^STUDY', resource['title'])
         self.assertEqual([ project ], resource['projects'])
@@ -1030,11 +1028,7 @@ class Orthanc(unittest.TestCase):
         self.assertEqual('../api/preview-series/%s' % series, resource['preview_url'])
         Unlink(project)
 
-        requests.post(URL + '/education/api/link', json.dumps({
-            'data' : instance,
-            'project' : project,
-        }), headers = AdministratorHeaders()).raise_for_status()
-
+        Link(project, instance)
         resource = CheckHasResource(project, 'Instance', instance)
         self.assertEqual('TEST - MY^STUDY', resource['title'])
         self.assertEqual([ project ], resource['projects'])
@@ -1044,29 +1038,79 @@ class Orthanc(unittest.TestCase):
         self.assertEqual('../api/preview-instance/%s' % instance, resource['preview_url'])
         Unlink(project)
 
-        requests.post(URL + '/education/api/link', json.dumps({
-            'data' : tags['0020,000d'],
-            'project' : project,
-        }), headers = AdministratorHeaders()).raise_for_status()
-
-        resource = CheckHasResource(project, 'Study', study)
+        Link(project, tags['0020,000d'])
+        CheckHasResource(project, 'Study', study)
         Unlink(project)
 
-        requests.post(URL + '/education/api/link', json.dumps({
-            'data' : tags['0020,000e'],
-            'project' : project,
-        }), headers = AdministratorHeaders()).raise_for_status()
-
-        resource = CheckHasResource(project, 'Series', series)
+        Link(project, tags['0020,000e'])
+        CheckHasResource(project, 'Series', series)
         Unlink(project)
 
-        requests.post(URL + '/education/api/link', json.dumps({
-            'data' : tags['0008,0018'],
-            'project' : project,
-        }), headers = AdministratorHeaders()).raise_for_status()
-
-        resource = CheckHasResource(project, 'Instance', instance)
+        Link(project, tags['0008,0018'])
+        CheckHasResource(project, 'Instance', instance)
         Unlink(project)
+
+        Link(project, 'http://my-public/stone-webviewer/index.html?study=%s' % tags['0020,000d'])
+        CheckHasResource(project, 'Study', study)
+        Unlink(project)
+
+        Link(project, 'http://my-public/stone-webviewer/index.html?series=%s' % tags['0020,000e'])
+        CheckHasResource(project, 'Series', series)
+        Unlink(project)
+
+        Link(project, 'http://my-public/volview/index.html?names=[archive.zip]&urls=[../studies/%s/archive]' % study)
+        CheckHasResource(project, 'Study', study)
+        Unlink(project)
+
+        Link(project, 'http://my-public/volview/index.html?names=[archive.zip]&urls=[../series/%s/archive]' % series)
+        CheckHasResource(project, 'Series', series)
+        Unlink(project)
+
+        Link(project, 'http://my-public/ohif/viewer?StudyInstanceUIDs=%s' % tags['0020,000d'])
+        CheckHasResource(project, 'Study', study)
+        Unlink(project)
+
+        Link(project, 'http://my-public/ohif/viewer?hangingprotocolId=mprAnd3DVolumeViewport&StudyInstanceUIDs=%s' % tags['0020,000d'])
+        CheckHasResource(project, 'Study', study)
+        Unlink(project)
+
+        Link(project, 'http://my-public/ohif/tmtv?StudyInstanceUIDs=%s' % tags['0020,000d'])
+        CheckHasResource(project, 'Study', study)
+        Unlink(project)
+
+        Link(project, 'http://my-public/ohif/segmentation?StudyInstanceUIDs=%s' % tags['0020,000d'])
+        CheckHasResource(project, 'Study', study)
+        Unlink(project)
+
+        Link(project, 'http://my-public/ohif/microscopy?StudyInstanceUIDs=%s' % tags['0020,000d'])
+        CheckHasResource(project, 'Study', study)
+        Unlink(project)
+
+        Link(project, 'http://my-public/wsi/app/viewer.html?series=%s' % series)
+        CheckHasResource(project, 'Series', series)
+        Unlink(project)
+
+        Link(project, 'http://my-public/wsi/app/viewer.html?instance=%s' % instance)
+        CheckHasResource(project, 'Instance', instance)
+        Unlink(project)
+
+        Link(project, 'http://my-public/app/explorer.html#study?uuid=%s' % study)
+        CheckHasResource(project, 'Study', study)
+        Unlink(project)
+
+        Link(project, 'http://my-public/app/explorer.html#series?uuid=%s' % series)
+        CheckHasResource(project, 'Series', series)
+        Unlink(project)
+
+        Link(project, 'http://my-public/app/explorer.html#instance?uuid=%s' % instance)
+        CheckHasResource(project, 'Instance', instance)
+        Unlink(project)
+
+        self.assertEqual(400, requests.post(URL + '/education/api/link', json.dumps({
+            'data' : 'nope',
+            'project' : project,
+        }), headers = AdministratorHeaders()).status_code)
+
 
 try:
     print('\nStarting the tests...')

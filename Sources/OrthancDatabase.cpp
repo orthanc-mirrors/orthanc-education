@@ -902,7 +902,7 @@ namespace OrthancDatabase
       Json::Value v;
 
       {
-        boost::regex pattern("/volview/index.html?.*(/(studies|series)/[0-9a-z-]+)/archive.*");
+        boost::regex pattern("/volview/index.html?.*(/(studies|series)/([0-9a-z-]+))/archive.*");
 
         boost::smatch what;
         if (regex_match(base, what, pattern) &&
@@ -957,7 +957,7 @@ namespace OrthancDatabase
             OrthancPlugins::RestApiGet(v, "/series/" + what[1], false))
         {
           resourceId = what[1];
-          level = Orthanc::ResourceType_Study;
+          level = Orthanc::ResourceType_Series;
           return true;
         }
       }
