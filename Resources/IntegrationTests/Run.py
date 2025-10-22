@@ -966,6 +966,108 @@ class Orthanc(unittest.TestCase):
         CheckNoAccess('/instances/%s/file' % instance)
 
 
+    def test_create_free_link(self):
+        def CheckNoResource(project):
+            lst = requests.get(URL + '/education/api/user-projects', headers = AdministratorHeaders()).json()
+            self.assertEqual(0, len(lst['projects'][project]['resources']))
+
+        def CheckHasResource(project, level, resource):
+            lst = requests.get(URL + '/education/api/user-projects', headers = AdministratorHeaders()).json()
+            resources = lst['projects'][project]['resources']
+            self.assertEqual(1, len(resources))
+            self.assertEqual(level, resources[0]['level'])
+            self.assertEqual(resource, resources[0]['resource-id'])
+            return resources[0]
+
+        def Unlink(project):
+            lst = requests.get(URL + '/education/api/user-projects', headers = AdministratorHeaders()).json()
+            resources = lst['projects'][project]['resources']
+            self.assertEqual(1, len(resources))
+            requests.post(URL + '/education/api/unlink', json.dumps({
+                'resource' : resources[0],
+                'project' : project,
+            }), headers = AdministratorHeaders()).raise_for_status()
+
+            CheckNoResource(project)
+
+        instance = self.create_test_instance_id()
+        tags = requests.get(URL + '/instances/%s/tags?short' % instance, headers = AdministratorHeaders()).json()
+        study = requests.get(URL + '/instances/%s/study' % instance, headers = AdministratorHeaders()).json() ['ID']
+        series = requests.get(URL + '/instances/%s/series' % instance, headers = AdministratorHeaders()).json() ['ID']
+
+        project = requests.post(URL + '/education/api/projects', json.dumps({
+            'name' : 'Hello',
+            'description' : 'World',
+        }), headers = AdministratorHeaders()).json() ['id']
+
+        CheckNoResource(project)
+
+        requests.post(URL + '/education/api/link', json.dumps({
+            'data' : study,
+            'project' : project,
+        }), headers = AdministratorHeaders()).raise_for_status()
+
+        resource = CheckHasResource(project, 'Study', study)
+        self.assertEqual('TEST - MY^STUDY', resource['title'])
+        self.assertEqual([ project ], resource['projects'])
+        self.assertEqual(tags['0020,000d'], resource['study-instance-uid'])
+        self.assertEqual('', resource['series-instance-uid'])
+        self.assertEqual('', resource['sop-instance-uid'])
+        self.assertEqual('../api/preview-study/%s' % study, resource['preview_url'])
+        Unlink(project)
+
+        requests.post(URL + '/education/api/link', json.dumps({
+            'data' : series,
+            'project' : project,
+        }), headers = AdministratorHeaders()).raise_for_status()
+
+        resource = CheckHasResource(project, 'Series', series)
+        self.assertEqual('TEST - MY^STUDY', resource['title'])
+        self.assertEqual([ project ], resource['projects'])
+        self.assertEqual(tags['0020,000d'], resource['study-instance-uid'])
+        self.assertEqual(tags['0020,000e'], resource['series-instance-uid'])
+        self.assertEqual('', resource['sop-instance-uid'])
+        self.assertEqual('../api/preview-series/%s' % series, resource['preview_url'])
+        Unlink(project)
+
+        requests.post(URL + '/education/api/link', json.dumps({
+            'data' : instance,
+            'project' : project,
+        }), headers = AdministratorHeaders()).raise_for_status()
+
+        resource = CheckHasResource(project, 'Instance', instance)
+        self.assertEqual('TEST - MY^STUDY', resource['title'])
+        self.assertEqual([ project ], resource['projects'])
+        self.assertEqual(tags['0020,000d'], resource['study-instance-uid'])
+        self.assertEqual(tags['0020,000e'], resource['series-instance-uid'])
+        self.assertEqual(tags['0008,0018'], resource['sop-instance-uid'])
+        self.assertEqual('../api/preview-instance/%s' % instance, resource['preview_url'])
+        Unlink(project)
+
+        requests.post(URL + '/education/api/link', json.dumps({
+            'data' : tags['0020,000d'],
+            'project' : project,
+        }), headers = AdministratorHeaders()).raise_for_status()
+
+        resource = CheckHasResource(project, 'Study', study)
+        Unlink(project)
+
+        requests.post(URL + '/education/api/link', json.dumps({
+            'data' : tags['0020,000e'],
+            'project' : project,
+        }), headers = AdministratorHeaders()).raise_for_status()
+
+        resource = CheckHasResource(project, 'Series', series)
+        Unlink(project)
+
+        requests.post(URL + '/education/api/link', json.dumps({
+            'data' : tags['0008,0018'],
+            'project' : project,
+        }), headers = AdministratorHeaders()).raise_for_status()
+
+        resource = CheckHasResource(project, 'Instance', instance)
+        Unlink(project)
+
 try:
     print('\nStarting the tests...')
     unittest.main(argv = [ sys.argv[0] ] + args.options)

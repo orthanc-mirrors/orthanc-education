@@ -888,7 +888,7 @@ void LinkResourceWithProject(OrthancPluginRestOutput* output,
 
     if (!OrthancDatabase::LookupResourceByUserInput(level, resourceId, data))
     {
-      throw Orthanc::OrthancException(Orthanc::ErrorCode_UnknownResource);
+      throw Orthanc::OrthancException(Orthanc::ErrorCode_BadRequest, "Cannot find DICOM corresponding to: " + data);
     }
   }
 
