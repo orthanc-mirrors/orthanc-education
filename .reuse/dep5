@@ -15,6 +15,7 @@ Copyright: 2024-2025 Sebastien Jodogne, EPL UCLouvain (Belgium)
 License: CC0-1.0
 
 Files:
+  Resources/CMake/Reproc.patch
   WebApplication/*.html
 Copyright: 2024-2025 Sebastien Jodogne, EPL UCLouvain (Belgium)
 License: AGPL-3.0-or-later
