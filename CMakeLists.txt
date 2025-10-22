@@ -23,7 +23,7 @@ cmake_minimum_required(VERSION 2.8...4.0)
 
 project(OrthancEducation)
 
-set(ORTHANC_PLUGIN_VERSION "mainline")
+set(ORTHANC_PLUGIN_VERSION "1.0")
 set(ORTHANC_PLUGIN_NAME "education")
 
 if (ORTHANC_PLUGIN_VERSION STREQUAL "mainline")
