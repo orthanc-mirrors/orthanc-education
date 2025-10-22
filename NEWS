@@ -1,6 +1,8 @@
 Pending changes in the mainline
 ===============================
 
+* Fix DICOM-ization of MRXS files from MIRAX
+
 
 Version 1.0 (2025-10-22)
 ========================

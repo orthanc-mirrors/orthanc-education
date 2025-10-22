@@ -55,9 +55,8 @@ bool WholeSlideImagingDicomizer::Unzip(TemporaryDirectory& target,
     {
       target.WriteFile(filename, content);
 
-      boost::filesystem::path path(target.GetPath(filename));
-
-      const std::string& extension = path.extension().string();
+      const boost::filesystem::path path(target.GetPath(filename));
+      const std::string extension = path.extension().string();
 
       if (extension == ".mrxs" ||
           extension == ".ndpi" ||
