@@ -26,6 +26,7 @@
 
 #include "IDicomizer.h"
 
+#include <Compatibility.h>
 #include <JobsEngine/JobsEngine.h>
 
 

@@ -29,6 +29,8 @@
 
 #include <Compatibility.h>
 
+#include <list>
+
 
 class WholeSlideImagingDicomizer : public IDicomizer
 {
