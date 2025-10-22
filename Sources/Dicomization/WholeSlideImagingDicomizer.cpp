@@ -32,6 +32,7 @@
 #include <SystemToolbox.h>
 
 #include <boost/algorithm/string/predicate.hpp>
+#include <boost/thread.hpp>
 
 
 bool WholeSlideImagingDicomizer::Unzip(TemporaryDirectory& target,
