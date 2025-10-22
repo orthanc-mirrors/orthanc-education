@@ -840,6 +840,132 @@ class Orthanc(unittest.TestCase):
         self.assertEqual(1, len(lst))
 
 
+    def test_dicom_permissions(self):
+        def CheckForbidden(path, headers = {}):
+            self.assertEqual(307, requests.get(URL + path, headers = headers, allow_redirects = False).status_code)
+
+        def CheckGranted(path, headers = {}):
+            self.assertEqual(200, requests.get(URL + path, headers = headers, allow_redirects = False).status_code)
+
+        def CheckPolicyPath(path):
+            requests.put(URL + '/education/api/projects/%s/instructors' % project, json.dumps([ ]),
+                         headers = AdministratorHeaders()).raise_for_status()
+            requests.put(URL + '/education/api/projects/%s/instructors' % project, json.dumps([ ]),
+                         headers = AdministratorHeaders()).raise_for_status()
+            requests.put(URL + '/education/api/projects/%s/policy' % project, json.dumps('hidden'),
+                         headers = AdministratorHeaders()).raise_for_status()
+
+            CheckGranted(path, headers = AdministratorHeaders())
+            CheckForbidden(path, headers = InstructorHeaders())
+            CheckForbidden(path, headers = LearnerHeaders())
+            CheckForbidden(path, headers = GuestHeaders())
+
+            requests.put(URL + '/education/api/projects/%s/policy' % project, json.dumps('public'),
+                         headers = AdministratorHeaders()).raise_for_status()
+
+            CheckGranted(path, headers = AdministratorHeaders())
+            CheckGranted(path, headers = InstructorHeaders())
+            CheckGranted(path, headers = LearnerHeaders())
+            CheckGranted(path, headers = GuestHeaders())
+
+            requests.put(URL + '/education/api/projects/%s/policy' % project, json.dumps('hidden'),
+                         headers = AdministratorHeaders()).raise_for_status()
+
+            CheckGranted(path, headers = AdministratorHeaders())
+            CheckForbidden(path, headers = InstructorHeaders())
+            CheckForbidden(path, headers = LearnerHeaders())
+            CheckForbidden(path, headers = GuestHeaders())
+
+            requests.put(URL + '/education/api/projects/%s/instructors' % project, json.dumps([ 'instructor@uclouvain.be' ]),
+                         headers = AdministratorHeaders()).raise_for_status()
+
+            CheckGranted(path, headers = AdministratorHeaders())
+            CheckGranted(path, headers = InstructorHeaders())
+            CheckForbidden(path, headers = LearnerHeaders())
+            CheckForbidden(path, headers = GuestHeaders())
+
+            requests.put(URL + '/education/api/projects/%s/learners' % project, json.dumps([ 'learner@uclouvain.be' ]),
+                         headers = AdministratorHeaders()).raise_for_status()
+
+            CheckGranted(path, headers = AdministratorHeaders())
+            CheckGranted(path, headers = InstructorHeaders())
+            CheckForbidden(path, headers = LearnerHeaders())
+            CheckForbidden(path, headers = GuestHeaders())
+
+            requests.put(URL + '/education/api/projects/%s/policy' % project, json.dumps('active'),
+                         headers = AdministratorHeaders()).raise_for_status()
+
+            CheckGranted(path, headers = AdministratorHeaders())
+            CheckGranted(path, headers = InstructorHeaders())
+            CheckGranted(path, headers = LearnerHeaders())
+            CheckForbidden(path, headers = GuestHeaders())
+
+        def CheckNoAccess(path):
+            CheckGranted(path, headers = AdministratorHeaders())
+            CheckForbidden(path, headers = InstructorHeaders())
+            CheckForbidden(path, headers = LearnerHeaders())
+            CheckForbidden(path, headers = GuestHeaders())
+
+        instance = self.create_test_instance_id()
+        study = requests.get(URL + '/instances/%s/study' % instance, headers = AdministratorHeaders()).json() ['ID']
+        series = requests.get(URL + '/instances/%s/series' % instance, headers = AdministratorHeaders()).json() ['ID']
+
+        project = requests.post(URL + '/education/api/projects', json.dumps({
+            'name' : 'Hello',
+            'description' : 'World',
+        }), headers = AdministratorHeaders()).json() ['id']
+
+        CheckNoAccess('/studies/%s/archive' % study)
+        CheckNoAccess('/series/%s/archive' % series)
+        CheckNoAccess('/instances/%s/file' % instance)
+
+        body = {
+            'resource' : {
+                'resource-id' : study,
+                'level' : 'Study',
+            },
+            'project' : project,
+        }
+
+        requests.post(URL + '/education/api/link', json.dumps(body), headers = AdministratorHeaders()).raise_for_status()
+        CheckPolicyPath('/studies/%s/archive' % study)
+        CheckNoAccess('/series/%s/archive' % series)
+        CheckNoAccess('/instances/%s/file' % instance)
+        requests.post(URL + '/education/api/unlink', json.dumps(body), headers = AdministratorHeaders()).raise_for_status()
+
+        body = {
+            'resource' : {
+                'resource-id' : series,
+                'level' : 'Series',
+            },
+            'project' : project,
+        }
+
+        requests.post(URL + '/education/api/link', json.dumps(body), headers = AdministratorHeaders()).raise_for_status()
+        CheckNoAccess('/studies/%s/archive' % study)
+        CheckPolicyPath('/series/%s/archive' % series)
+        CheckNoAccess('/instances/%s/file' % instance)
+        requests.post(URL + '/education/api/unlink', json.dumps(body), headers = AdministratorHeaders()).raise_for_status()
+
+        body = {
+            'resource' : {
+                'resource-id' : instance,
+                'level' : 'Instance',
+            },
+            'project' : project,
+        }
+
+        requests.post(URL + '/education/api/link', json.dumps(body), headers = AdministratorHeaders()).raise_for_status()
+        CheckNoAccess('/studies/%s/archive' % study)
+        CheckNoAccess('/series/%s/archive' % series)
+        CheckPolicyPath('/instances/%s/file' % instance)
+        requests.post(URL + '/education/api/unlink', json.dumps(body), headers = AdministratorHeaders()).raise_for_status()
+
+        CheckNoAccess('/studies/%s/archive' % study)
+        CheckNoAccess('/series/%s/archive' % series)
+        CheckNoAccess('/instances/%s/file' % instance)
+
+
 try:
     print('\nStarting the tests...')
     unittest.main(argv = [ sys.argv[0] ] + args.options)

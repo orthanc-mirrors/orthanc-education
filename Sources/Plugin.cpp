@@ -185,6 +185,16 @@ static AuthorizationStatus DoAuthorization(const AuthenticatedUser& user,
             AuthorizationStatus_Forbidden);
   }
 
+  if (path.size() == 3 &&
+      path[0] == "instances" &&
+      path[2] == "file")
+  {
+    // For integration tests
+    return (OrthancDatabase::IsGrantedResource(granter, Orthanc::ResourceType_Instance, path[1]) ?
+            AuthorizationStatus_GrantedWithoutPayload :
+            AuthorizationStatus_Forbidden);
+  }
+
 
   /**
    * Checks related to the education plugin
