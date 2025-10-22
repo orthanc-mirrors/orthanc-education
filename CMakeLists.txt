@@ -197,8 +197,11 @@ add_library(OrthancEducation
   ${REPROC_SOURCES}
 
   Sources/Dicomization/ActiveUploads.cpp
+  Sources/Dicomization/DicomizationJob.cpp
   Sources/Dicomization/ProcessRunner.cpp
+  Sources/Dicomization/SharedLogs.cpp
   Sources/Dicomization/TemporaryDirectory.cpp
+  Sources/Dicomization/WholeSlideImagingDicomizer.cpp
   Sources/EducationConfiguration.cpp
   Sources/EducationEnumerations.cpp
   Sources/EducationRestApi.cpp

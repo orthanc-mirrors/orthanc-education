@@ -24,10 +24,19 @@
 
 #pragma once
 
-#include "HttpToolbox.h"
-#include "Permissions/AuthenticatedUser.h"
+#include <boost/noncopyable.hpp>
+#include <boost/thread/mutex.hpp>
+#include <string>
 
 
-void RegisterEducationRestApiRoutes();
+class SharedLogs : public boost::noncopyable
+{
+private:
+  boost::mutex   mutex_;
+  std::string    content_;
 
-AuthenticatedUser* AuthenticateFromEducationCookie(const std::list<HttpToolbox::Cookie>& cookies);
+public:
+  void Append(const std::string& data);
+
+  void GetContent(std::string& content);
+};

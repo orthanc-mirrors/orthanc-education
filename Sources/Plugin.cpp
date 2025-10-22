@@ -23,6 +23,7 @@
 
 
 #include "Dicomization/ActiveUploads.h"
+#include "Dicomization/DicomizationJob.h"
 #include "EducationConfiguration.h"
 #include "EducationRestApi.h"
 #include "LTI/LTIRoutes.h"
@@ -402,7 +403,7 @@ static OrthancPluginErrorCode HttpAuthentication(
 
 
 static boost::thread  uploadsCleanerThread_;
-static bool           uploadsCleanerContinue_;
+static bool           uploadsCleanerContinue_ = false;
 
 static void UploadsCleaner()
 {
@@ -474,10 +475,6 @@ static OrthancPluginErrorCode OnChangeCallback(OrthancPluginChangeType changeTyp
 
       break;
     }
-
-    case OrthancPluginChangeType_OrthancStopped:
-      FinalizeEducationJobsEngine();
-      break;
 
     default:
       break;
@@ -756,6 +753,8 @@ extern "C"
     {
       uploadsCleanerThread_.join();
     }
+
+    DicomizationJob::FinalizeJobsEngine();
 
     Orthanc::Toolbox::FinalizeOpenSsl();
     Orthanc::Logging::Finalize();

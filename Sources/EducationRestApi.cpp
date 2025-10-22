@@ -25,8 +25,8 @@
 #include "EducationRestApi.h"
 
 #include "Dicomization/ActiveUploads.h"
-#include "Dicomization/ProcessRunner.h"
-#include "Dicomization/TemporaryDirectory.h"
+#include "Dicomization/DicomizationJob.h"
+#include "Dicomization/WholeSlideImagingDicomizer.h"
 #include "EducationConfiguration.h"
 #include "LTI/LTIRoutes.h"
 #include "OrthancDatabase.h"
@@ -459,111 +459,113 @@ void ChangeProjectParameter(OrthancPluginRestOutput* output,
 
 
 
-
-class Thumbnail : public boost::noncopyable
+namespace
 {
-private:
-  const OrthancPlugins::OrthancImage&      source_;
-  std::unique_ptr<Orthanc::ImageAccessor>  modified_;
-
-public:
-  explicit Thumbnail(const OrthancPlugins::OrthancImage& source) :
-    source_(source)
+  class Thumbnail : public boost::noncopyable
   {
-  }
+  private:
+    const OrthancPlugins::OrthancImage&      source_;
+    std::unique_ptr<Orthanc::ImageAccessor>  modified_;
 
-  Orthanc::PixelFormat GetFormat() const
-  {
-    if (modified_.get() == NULL)
+  public:
+    explicit Thumbnail(const OrthancPlugins::OrthancImage& source) :
+      source_(source)
     {
-      switch (source_.GetPixelFormat())
-      {
-        case OrthancPluginPixelFormat_Grayscale8:
-          return Orthanc::PixelFormat_Grayscale8;
-
-        case OrthancPluginPixelFormat_RGB24:
-          return Orthanc::PixelFormat_RGB24;
-
-        default:
-          throw Orthanc::OrthancException(Orthanc::ErrorCode_NotImplemented);
-      }
     }
-    else
-    {
-      return modified_->GetFormat();
-    }
-  }
 
-  unsigned int GetWidth() const
-  {
-    if (modified_.get() == NULL)
-    {
-      return source_.GetWidth();
-    }
-    else
-    {
-      return modified_->GetWidth();
-    }
-  }
-
-  unsigned int GetHeight() const
-  {
-    if (modified_.get() == NULL)
-    {
-      return source_.GetHeight();
-    }
-    else
-    {
-      return modified_->GetHeight();
-    }
-  }
-
-  void GetAccessor(Orthanc::ImageAccessor& accessor) const
-  {
-    if (modified_.get() == NULL)
-    {
-      accessor.AssignReadOnly(GetFormat(), source_.GetWidth(), source_.GetHeight(), source_.GetPitch(), source_.GetBuffer());
-    }
-    else
-    {
-      modified_->GetReadOnlyAccessor(accessor);
-    }
-  }
-
-  void Resize(unsigned int width,
-              unsigned int height,
-              bool smooth)
-  {
-    Orthanc::ImageAccessor current;
-    GetAccessor(current);
-
-    std::unique_ptr<Orthanc::ImageAccessor> resized(new Orthanc::Image(current.GetFormat(), width, height, false));
-
-    if (smooth &&
-        width < current.GetWidth() &&
-        height < current.GetHeight())  // Only smooth if downscaling
+    Orthanc::PixelFormat GetFormat() const
     {
       if (modified_.get() == NULL)
       {
-        std::unique_ptr<Orthanc::ImageAccessor> smoothed(Orthanc::Image::Clone(current));
-        Orthanc::ImageProcessing::SmoothGaussian5x5(*smoothed, false);
-        Orthanc::ImageProcessing::Resize(*resized, *smoothed);
+        switch (source_.GetPixelFormat())
+        {
+          case OrthancPluginPixelFormat_Grayscale8:
+            return Orthanc::PixelFormat_Grayscale8;
+
+          case OrthancPluginPixelFormat_RGB24:
+            return Orthanc::PixelFormat_RGB24;
+
+          default:
+            throw Orthanc::OrthancException(Orthanc::ErrorCode_NotImplemented);
+        }
       }
       else
       {
-        // The smoothing can be done inplace, as "resized" will overwrite "modified_"
-        Orthanc::ImageProcessing::SmoothGaussian5x5(*modified_, false);
-        Orthanc::ImageProcessing::Resize(*resized, *modified_);
+        return modified_->GetFormat();
       }
     }
-    else
+
+    unsigned int GetWidth() const
     {
-      Orthanc::ImageProcessing::Resize(*resized, current);
+      if (modified_.get() == NULL)
+      {
+        return source_.GetWidth();
+      }
+      else
+      {
+        return modified_->GetWidth();
+      }
     }
 
-    modified_.reset(resized.release());
-  }
-};
+    unsigned int GetHeight() const
+    {
+      if (modified_.get() == NULL)
+      {
+        return source_.GetHeight();
+      }
+      else
+      {
+        return modified_->GetHeight();
+      }
+    }
+
+    void GetAccessor(Orthanc::ImageAccessor& accessor) const
+    {
+      if (modified_.get() == NULL)
+      {
+        accessor.AssignReadOnly(GetFormat(), source_.GetWidth(), source_.GetHeight(), source_.GetPitch(), source_.GetBuffer());
+      }
+      else
+      {
+        modified_->GetReadOnlyAccessor(accessor);
+      }
+    }
+
+    void Resize(unsigned int width,
+                unsigned int height,
+                bool smooth)
+    {
+      Orthanc::ImageAccessor current;
+      GetAccessor(current);
+
+      std::unique_ptr<Orthanc::ImageAccessor> resized(new Orthanc::Image(current.GetFormat(), width, height, false));
+
+      if (smooth &&
+          width < current.GetWidth() &&
+          height < current.GetHeight())  // Only smooth if downscaling
+      {
+        if (modified_.get() == NULL)
+        {
+          std::unique_ptr<Orthanc::ImageAccessor> smoothed(Orthanc::Image::Clone(current));
+          Orthanc::ImageProcessing::SmoothGaussian5x5(*smoothed, false);
+          Orthanc::ImageProcessing::Resize(*resized, *smoothed);
+        }
+        else
+        {
+          // The smoothing can be done inplace, as "resized" will overwrite "modified_"
+          Orthanc::ImageProcessing::SmoothGaussian5x5(*modified_, false);
+          Orthanc::ImageProcessing::Resize(*resized, *modified_);
+        }
+      }
+      else
+      {
+        Orthanc::ImageProcessing::Resize(*resized, current);
+      }
+
+      modified_.reset(resized.release());
+    }
+  };
+}
 
 
 
@@ -1239,550 +1241,6 @@ void UploadFile(OrthancPluginRestOutput* output,
 }
 
 
-class SharedOutputBuffer : public boost::noncopyable
-{
-private:
-  boost::mutex   mutex_;
-  std::string    content_;
-
-public:
-  void Append(const std::string& data)
-  {
-    boost::mutex::scoped_lock lock(mutex_);
-    content_ += data;
-  }
-
-  void GetContent(std::string& content)
-  {
-    boost::mutex::scoped_lock lock(mutex_);
-    content  = content_;
-  }
-};
-
-
-class IDicomizer : public boost::noncopyable
-{
-public:
-  virtual ~IDicomizer()
-  {
-  }
-
-  virtual std::string GetName() = 0;
-
-  virtual std::string GetJobType() = 0;
-
-  virtual bool Execute(std::unique_ptr<Orthanc::TemporaryFile>& upload,
-                       SharedOutputBuffer& logs,
-                       const bool& stopped) = 0;
-};
-
-
-
-#include <Compression/ZipReader.h>
-
-
-static bool IsZipFile(const boost::filesystem::path& path)
-{
-  std::string header;
-
-#if ORTHANC_FRAMEWORK_VERSION_IS_ABOVE(1, 12, 10)
-  Orthanc::SystemToolbox::ReadFileRange(header, path, 0, 4, false /* don't throw exception */);
-#else
-  Orthanc::SystemToolbox::ReadFileRange(header, path.string(), 0, 4, false /* don't throw exception */);
-#endif
-
-  if (header.size() != 4)
-  {
-    return false;
-  }
-  else
-  {
-    // https://en.wikipedia.org/wiki/List_of_file_signatures
-    const uint8_t *b = reinterpret_cast<const uint8_t*>(header.c_str());
-    return ((b[0] == 0x50 && b[1] == 0x4b && b[2] == 0x03 && b[3] == 0x04) ||
-            (b[0] == 0x50 && b[1] == 0x4b && b[2] == 0x05 && b[3] == 0x06) ||
-            (b[0] == 0x50 && b[1] == 0x4b && b[2] == 0x07 && b[3] == 0x08));
-  }
-}
-
-
-class WholeSlideImagingDicomizer : public IDicomizer
-{
-private:
-  std::string  studyDescription_;
-  uint8_t      backgroundRed_;
-  uint8_t      backgroundGreen_;
-  uint8_t      backgroundBlue_;
-  bool         forceOpenSlide_;
-  bool         reconstructPyramid_;
-
-  static bool Unzip(TemporaryDirectory& target,
-                    std::string& unzipMaster,
-                    const Orthanc::TemporaryFile& zip,
-                    const bool& stopped)
-  {
-    std::unique_ptr<Orthanc::ZipReader> reader(Orthanc::ZipReader::CreateFromFile(zip.GetPath()));
-
-    std::string filename, content;
-    while (reader->ReadNextFile(filename, content))
-    {
-      if (stopped)
-      {
-        return false;
-      }
-
-      // Ignore directories in the ZIP
-      if (!boost::ends_with(filename, "/"))
-      {
-        target.WriteFile(filename, content);
-
-        boost::filesystem::path path(target.GetPath(filename));
-
-        const std::string& extension = path.extension().string();
-
-        if (extension == ".mrxs" ||
-            extension == ".ndpi" ||
-            extension == ".scn" ||
-            extension == ".tif" ||
-            extension == ".tiff" ||
-            extension == ".png" ||
-            extension == ".jpg" ||
-            extension == ".jpeg")
-        {
-          if (unzipMaster.empty())
-          {
-            unzipMaster = path.string();
-          }
-          else
-          {
-            throw Orthanc::OrthancException(Orthanc::ErrorCode_BadFileFormat, "ZIP file containing multiple candidate whole-slide images");
-          }
-        }
-      }
-    }
-
-    if (unzipMaster.empty())
-    {
-      throw Orthanc::OrthancException(Orthanc::ErrorCode_BadFileFormat, "ZIP file containing no whole-slide image");
-    }
-
-    return true;
-  }
-
-  void PrepareArguments(std::list<std::string>& args) const
-  {
-    if (reconstructPyramid_)
-    {
-      args.push_back("--pyramid");
-      args.push_back("1");
-    }
-
-    if (forceOpenSlide_)
-    {
-      args.push_back("--force-openslide");
-      args.push_back("1");
-    }
-
-    args.push_back("--color");
-
-    {
-      char color[32];
-      sprintf(color, "%d,%d,%d", backgroundRed_, backgroundGreen_, backgroundBlue_);
-      args.push_back(color);
-    }
-
-    const std::string openslide = EducationConfiguration::GetInstance().GetPathToOpenSlide();
-    if (!openslide.empty())
-    {
-      args.push_back("--openslide");
-      args.push_back(openslide);
-    }
-  }
-
-  static bool ExecuteDicomizer(const std::string& dicomizer,
-                               const std::list<std::string>& args,
-                               SharedOutputBuffer& logs,
-                               const bool& stopped)
-  {
-    ProcessRunner runner;
-    runner.Start(dicomizer, args, ProcessRunner::Stream_Error);
-
-    while (runner.IsRunning())
-    {
-      if (stopped)
-      {
-        runner.Terminate();
-        return false;
-      }
-
-      std::string s;
-      runner.Read(s);
-      logs.Append(s);
-
-      boost::this_thread::sleep(boost::posix_time::milliseconds(100));
-    }
-
-    {
-      std::string s;
-      runner.Read(s);
-      logs.Append(s);
-    }
-
-    return (runner.GetExitCode() == 0);
-  }
-
-  static bool UploadDicomToOrthanc(const TemporaryDirectory& target,
-                                   const bool& stopped)
-  {
-    boost::filesystem::directory_iterator iterator(target.GetRoot());
-    boost::filesystem::directory_iterator end;
-
-    while (iterator != end)
-    {
-      if (stopped)
-      {
-        return false;
-      }
-
-      std::string content;
-
-#if ORTHANC_FRAMEWORK_VERSION_IS_ABOVE(1, 12, 10)
-      Orthanc::SystemToolbox::ReadFile(content, iterator->path());
-#else
-      Orthanc::SystemToolbox::ReadFile(content, iterator->path().string());
-#endif
-
-      if (!content.empty())
-      {
-        Json::Value answer;
-        if (!OrthancPlugins::RestApiPost(answer, "/instances", content.c_str(), content.size(), false))
-        {
-          throw Orthanc::OrthancException(Orthanc::ErrorCode_InternalError, "Cannot upload a DICOM-ized file");
-        }
-      }
-
-      ++iterator;
-    }
-
-    return true;
-  }
-
-public:
-  WholeSlideImagingDicomizer() :
-    studyDescription_("Whole-slide image"),
-    backgroundRed_(255),
-    backgroundGreen_(255),
-    backgroundBlue_(255),
-    forceOpenSlide_(false),
-    reconstructPyramid_(true)
-  {
-  }
-
-  void SetStudyDescription(const std::string& studyDescription)
-  {
-    studyDescription_ = studyDescription;
-  }
-
-  void SetBackgroundColor(uint8_t red,
-                          uint8_t green,
-                          uint8_t blue)
-  {
-    backgroundRed_ = red;
-    backgroundGreen_ = green;
-    backgroundBlue_ = blue;
-  }
-
-  void SetForceOpenSlide(bool force)
-  {
-    forceOpenSlide_ = force;
-  }
-
-  void SetReconstructPyramid(bool reconstruct)
-  {
-    reconstructPyramid_ = reconstruct;
-  }
-
-  virtual std::string GetName() ORTHANC_OVERRIDE
-  {
-    return studyDescription_;
-  }
-
-  virtual std::string GetJobType() ORTHANC_OVERRIDE
-  {
-    return "wsi";
-  }
-
-  virtual bool Execute(std::unique_ptr<Orthanc::TemporaryFile>& upload,
-                       SharedOutputBuffer& logs,
-                       const bool& stopped) ORTHANC_OVERRIDE
-  {
-    assert(upload.get() != NULL);
-
-    const std::string dicomizer = EducationConfiguration::GetInstance().GetPathToWsiDicomizer();
-    if (dicomizer.empty())
-    {
-      throw Orthanc::OrthancException(Orthanc::ErrorCode_BadFileFormat, "No DICOM-izer is configured for whole-slide images");
-    }
-
-    std::unique_ptr<TemporaryDirectory> unzip;
-    std::string unzipMaster;
-
-    if (IsZipFile(upload->GetPath()))
-    {
-      unzip.reset(new TemporaryDirectory);
-
-      if (!Unzip(*unzip, unzipMaster, *upload, stopped))
-      {
-        return false;
-      }
-
-      // We don't need the ZIP file anymore
-      upload.reset(NULL);
-    }
-
-    Orthanc::TemporaryFile dataset;
-
-    {
-      Json::Value json;
-      json["StudyDescription"] = studyDescription_;
-
-      std::string s;
-      Orthanc::Toolbox::WriteFastJson(s, json);
-      dataset.Write(s);
-    }
-
-    std::list<std::string> args;
-    PrepareArguments(args);
-
-    args.push_back("--dataset");
-
-#if ORTHANC_FRAMEWORK_VERSION_IS_ABOVE(1, 12, 10)
-    args.push_back(dataset.GetPath().string());
-#else
-    args.push_back(dataset.GetPath());
-#endif
-
-    if (unzip.get() == NULL)
-    {
-#if ORTHANC_FRAMEWORK_VERSION_IS_ABOVE(1, 12, 10)
-      args.push_back(upload->GetPath().string());
-#else
-      args.push_back(upload->GetPath());
-#endif
-    }
-    else
-    {
-      args.push_back(unzipMaster);
-    }
-
-    std::unique_ptr<TemporaryDirectory> target(new TemporaryDirectory);
-    args.push_back("--folder");
-    args.push_back(target->GetRoot().string());
-
-    if (!ExecuteDicomizer(dicomizer, args, logs, stopped))
-    {
-      return false;
-    }
-
-    unzip.reset(NULL);
-    upload.reset(NULL);
-
-    return UploadDicomToOrthanc(*target, stopped);
-  }
-};
-
-
-
-#include <JobsEngine/JobsEngine.h>
-
-static Orthanc::JobsEngine engine_(20);  // Only keep 20 completed jobs
-
-
-class DicomizerJob : public Orthanc::IJob
-{
-private:
-  enum Status
-  {
-    Status_Running,
-    Status_Success,
-    Status_Failure
-  };
-
-  std::string                  uploadId_;
-  std::unique_ptr<IDicomizer>  dicomizer_;
-  std::string                  name_;
-  std::string                  jobType_;
-  SharedOutputBuffer           logs_;
-  boost::thread                thread_;
-  bool                         stopped_;
-
-  boost::mutex                 mutex_;   // To protect "status_"
-  Status                       status_;
-
-  static void Worker(DicomizerJob* that)
-  {
-    assert(that != NULL);
-
-    std::unique_ptr<Orthanc::TemporaryFile> upload;
-
-    try
-    {
-      upload.reset(ActiveUploads::GetInstance().ReleaseTemporaryFile(that->uploadId_));
-    }
-    catch (Orthanc::OrthancException&)
-    {
-      boost::mutex::scoped_lock lock(that->mutex_);
-      that->status_ = Status_Failure;
-      return;
-    }
-
-    assert(upload.get() != NULL);
-
-    bool success;
-
-    try
-    {
-      success = that->dicomizer_->Execute(upload, that->logs_, that->stopped_);
-    }
-    catch (Orthanc::OrthancException& e)
-    {
-      success = false;
-    }
-    catch (...)
-    {
-      success = false;
-    }
-
-    {
-      boost::mutex::scoped_lock lock(that->mutex_);
-      that->status_ = (success ? Status_Success : Status_Failure);
-    }
-  }
-
-public:
-  DicomizerJob(const std::string& uploadId,
-               IDicomizer* dicomizer) :
-    uploadId_(uploadId),
-    dicomizer_(dicomizer),
-    stopped_(false),
-    status_(Status_Running)
-  {
-    if (dicomizer == NULL)
-    {
-      throw Orthanc::OrthancException(Orthanc::ErrorCode_NullPointer);
-    }
-
-    name_ = dicomizer->GetName();
-    jobType_ = dicomizer->GetJobType();
-  }
-
-  virtual ~DicomizerJob()
-  {
-    if (thread_.joinable())
-    {
-      thread_.join();
-    }
-  }
-
-  virtual void Start() ORTHANC_OVERRIDE
-  {
-    thread_ = boost::thread(Worker, this);
-  }
-
-  virtual Orthanc::JobStepResult Step(const std::string& jobId) ORTHANC_OVERRIDE
-  {
-    boost::this_thread::sleep(boost::posix_time::milliseconds(100));
-
-    {
-      boost::mutex::scoped_lock lock(mutex_);
-      if (status_ == Status_Success ||
-          status_ == Status_Failure)
-      {
-        return (status_ == Status_Success ?
-                Orthanc::JobStepResult::Success() :
-                Orthanc::JobStepResult::Failure(Orthanc::ErrorCode_InternalError, ""));
-      }
-    }
-
-    return Orthanc::JobStepResult::Continue();
-  }
-
-  virtual void Reset() ORTHANC_OVERRIDE
-  {
-    throw Orthanc::OrthancException(Orthanc::ErrorCode_NotImplemented);
-  }
-
-  virtual void Stop(Orthanc::JobStopReason reason) ORTHANC_OVERRIDE
-  {
-    if (reason == Orthanc::JobStopReason_Canceled)
-    {
-      stopped_ = true;
-    }
-
-    if (thread_.joinable())
-    {
-      thread_.join();
-    }
-  }
-
-  virtual float GetProgress() const ORTHANC_OVERRIDE
-  {
-    return 0;
-  }
-
-  virtual void GetJobType(std::string& target) const ORTHANC_OVERRIDE
-  {
-    target = jobType_;
-  }
-
-  virtual void GetPublicContent(Json::Value& value) const ORTHANC_OVERRIDE
-  {
-    std::string logs;
-    const_cast<SharedOutputBuffer&>(logs_).GetContent(logs);
-
-    value = Json::objectValue;
-    value["logs"] = logs;
-    value["name"] = name_;
-  }
-
-  virtual bool Serialize(Json::Value& value) const ORTHANC_OVERRIDE
-  {
-    return false;
-  }
-
-  virtual bool GetOutput(std::string& output,
-                         Orthanc::MimeType& mime,
-                         std::string& filename,
-                         const std::string& key) ORTHANC_OVERRIDE
-  {
-    throw Orthanc::OrthancException(Orthanc::ErrorCode_NotImplemented);
-  }
-
-  virtual bool DeleteOutput(const std::string& key) ORTHANC_OVERRIDE
-  {
-    throw Orthanc::OrthancException(Orthanc::ErrorCode_NotImplemented);
-  }
-
-  virtual void DeleteAllOutputs() ORTHANC_OVERRIDE
-  {
-    throw Orthanc::OrthancException(Orthanc::ErrorCode_NotImplemented);
-  }
-
-  virtual bool GetUserData(Json::Value& userData) const ORTHANC_OVERRIDE
-  {
-    return false;
-  }
-
-#if ORTHANC_FRAMEWORK_VERSION_IS_ABOVE(1, 12, 10)
-  virtual void SetUserData(const Json::Value& userData) ORTHANC_OVERRIDE
-  {
-    throw Orthanc::OrthancException(Orthanc::ErrorCode_NotImplemented);
-  }
-#endif
-};
-
-
-
 void Dicomization(OrthancPluginRestOutput* output,
                   const std::string& url,
                   const OrthancPluginHttpRequest* request,
@@ -1793,14 +1251,14 @@ void Dicomization(OrthancPluginRestOutput* output,
   if (request->method == OrthancPluginHttpMethod_Get)
   {
     std::set<std::string> jobs;
-    engine_.GetRegistry().ListJobs(jobs);
+    DicomizationJob::GetJobsEngine().GetRegistry().ListJobs(jobs);
 
     Json::Value answer = Json::arrayValue;
 
     for (std::set<std::string>::const_iterator it = jobs.begin(); it != jobs.end(); ++it)
     {
       Orthanc::JobInfo info;
-      if (engine_.GetRegistry().GetJobInfo(info, *it))
+      if (DicomizationJob::GetJobsEngine().GetRegistry().GetJobInfo(info, *it))
       {
         Json::Value item;
         item["id"] = *it;
@@ -1874,7 +1332,7 @@ void Dicomization(OrthancPluginRestOutput* output,
         throw;
       }
 
-      engine_.GetRegistry().Submit(new DicomizerJob(uploadId, dicomizer.release()), 0 /* priority */);
+      DicomizationJob::GetJobsEngine().GetRegistry().Submit(new DicomizationJob(uploadId, dicomizer.release()), 0 /* priority */);
 
       HttpToolbox::AnswerText(output, "");
     }
@@ -1896,7 +1354,7 @@ void GetDicomizationLogs(OrthancPluginRestOutput* output,
   const std::string jobId(request->groups[0]);
 
   Orthanc::JobInfo info;
-  if (engine_.GetRegistry().GetJobInfo(info, jobId))
+  if (DicomizationJob::GetJobsEngine().GetRegistry().GetJobInfo(info, jobId))
   {
     std::string logs = Orthanc::SerializationToolbox::ReadString(info.GetStatus().GetPublicContent(), "logs");
     HttpToolbox::AnswerText(output, logs);
@@ -1906,9 +1364,6 @@ void GetDicomizationLogs(OrthancPluginRestOutput* output,
     throw Orthanc::OrthancException(Orthanc::ErrorCode_UnknownResource);
   }
 }
-
-
-
 
 
 void RegisterEducationRestApiRoutes()
@@ -1963,9 +1418,6 @@ void RegisterEducationRestApiRoutes()
   RestApiRouter::RegisterAdministratorRoute<UploadFile>("/education/api/upload");
   RestApiRouter::RegisterAdministratorRoute<Dicomization>("/education/api/dicomization");
   RestApiRouter::RegisterAdministratorGetRoute<GetDicomizationLogs>("/education/api/dicomization/{}/logs");
-
-  engine_.SetWorkersCount(1);
-  engine_.Start();
 }
 
 
@@ -1986,10 +1438,4 @@ AuthenticatedUser* AuthenticateFromEducationCookie(const std::list<HttpToolbox::
   }
 
   return NULL;
-}
-
-
-void FinalizeEducationJobsEngine()
-{
-  engine_.Stop();
 }

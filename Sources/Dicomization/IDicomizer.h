@@ -24,10 +24,23 @@
 
 #pragma once
 
-#include "HttpToolbox.h"
-#include "Permissions/AuthenticatedUser.h"
+#include "SharedLogs.h"
+
+#include <TemporaryFile.h>
 
 
-void RegisterEducationRestApiRoutes();
+class IDicomizer : public boost::noncopyable
+{
+public:
+  virtual ~IDicomizer()
+  {
+  }
 
-AuthenticatedUser* AuthenticateFromEducationCookie(const std::list<HttpToolbox::Cookie>& cookies);
+  virtual std::string GetName() = 0;
+
+  virtual std::string GetJobType() = 0;
+
+  virtual bool Execute(std::unique_ptr<Orthanc::TemporaryFile>& upload,
+                       SharedLogs& logs,
+                       const bool& stopped) = 0;
+};

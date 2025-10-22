@@ -22,12 +22,18 @@
  **/
 
 
-#pragma once
-
-#include "HttpToolbox.h"
-#include "Permissions/AuthenticatedUser.h"
+#include "SharedLogs.h"
 
 
-void RegisterEducationRestApiRoutes();
+void SharedLogs::Append(const std::string& data)
+{
+  boost::mutex::scoped_lock lock(mutex_);
+  content_ += data;
+}
 
-AuthenticatedUser* AuthenticateFromEducationCookie(const std::list<HttpToolbox::Cookie>& cookies);
+
+void SharedLogs::GetContent(std::string& content)
+{
+  boost::mutex::scoped_lock lock(mutex_);
+  content = content_;
+}
