@@ -26,6 +26,7 @@
 
 #include "SharedLogs.h"
 
+#include <Compatibility.h>
 #include <TemporaryFile.h>
 
 

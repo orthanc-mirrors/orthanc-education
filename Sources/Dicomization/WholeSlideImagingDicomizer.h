@@ -27,8 +27,6 @@
 #include "IDicomizer.h"
 #include "TemporaryDirectory.h"
 
-#include <Compatibility.h>
-
 #include <list>
 
 
