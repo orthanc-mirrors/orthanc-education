@@ -617,6 +617,14 @@ var app = new Vue({
         });
     },
 
+    cancelDicomization: function(dicomization) {
+      var that = this;
+      axios.delete('../api/dicomization/' + dicomization.id)
+        .then(function() {
+          that.reloadDicomizations();
+        });
+    },
+
     openLogs: function(dicomization) {
       var url = '../api/dicomization/' + dicomization.id + '/logs';
       window.open(url, '_blank').focus();

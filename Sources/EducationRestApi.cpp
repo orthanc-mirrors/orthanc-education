@@ -1241,10 +1241,10 @@ void UploadFile(OrthancPluginRestOutput* output,
 }
 
 
-void Dicomization(OrthancPluginRestOutput* output,
-                  const std::string& url,
-                  const OrthancPluginHttpRequest* request,
-                  const AuthenticatedUser& user)
+void StartDicomization(OrthancPluginRestOutput* output,
+                       const std::string& url,
+                       const OrthancPluginHttpRequest* request,
+                       const AuthenticatedUser& user)
 {
   assert(user.GetRole() == Role_Administrator);
 
@@ -1344,6 +1344,27 @@ void Dicomization(OrthancPluginRestOutput* output,
 }
 
 
+void CancelDicomization(OrthancPluginRestOutput* output,
+                        const std::string& url,
+                        const OrthancPluginHttpRequest* request,
+                        const AuthenticatedUser& user)
+{
+  assert(user.GetRole() == Role_Administrator);
+
+  const std::string jobId(request->groups[0]);
+
+  if (request->method == OrthancPluginHttpMethod_Delete)
+  {
+    DicomizationJob::GetJobsEngine().GetRegistry().Cancel(jobId);
+    HttpToolbox::AnswerText(output, "");
+  }
+  else
+  {
+    OrthancPluginSendMethodNotAllowed(OrthancPlugins::GetGlobalContext(), output, "DELETE");
+  }
+}
+
+
 void GetDicomizationLogs(OrthancPluginRestOutput* output,
                          const std::string& url,
                          const OrthancPluginHttpRequest* request,
@@ -1416,7 +1437,8 @@ void RegisterEducationRestApiRoutes()
   RestApiRouter::RegisterAdministratorRoute<SetLtiClientId>("/education/api/config/lti-client-id");
 
   RestApiRouter::RegisterAdministratorRoute<UploadFile>("/education/api/upload");
-  RestApiRouter::RegisterAdministratorRoute<Dicomization>("/education/api/dicomization");
+  RestApiRouter::RegisterAdministratorRoute<StartDicomization>("/education/api/dicomization");
+  RestApiRouter::RegisterAdministratorRoute<CancelDicomization>("/education/api/dicomization/{}");
   RestApiRouter::RegisterAdministratorGetRoute<GetDicomizationLogs>("/education/api/dicomization/{}/logs");
 }
 

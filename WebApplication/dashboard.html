@@ -103,7 +103,7 @@
                 </p>
                 <p>
                   This development was partially funded by the
-                  <a href="https://www.lespecialiste.be/fr/actualites/e-health/laquo-un-hopital-virtuel-pour-ameliorer-l-rsquo-enseignement-en-informatique-medical-raquo.html" target="_blank">Virtual Hospital grant</a> at
+                  <a href="https://www.virtual-hospital.org/" target="_blank">Virtual Hospital grant</a> at
                   <a href="https://www.uclouvain.be/facultes/epl" target="_blank">Louvain School of Engineering (EPL)</a>.
                   The platform is built on the top of <a href="https://orthanc.uclouvain.be/" target="_blank">Orthanc</a>, a free and open-source ecosystem
                   for medical imaging that is developed at UCLouvain.
@@ -461,6 +461,10 @@
                 <div class="row justify-content-center">
                   <div class="col-8">
 
+                    <p>
+                      <button type="button" class="btn btn-lg btn-primary" @click="reloadDicomizations()">Refresh</button>
+                    </p>
+
                     <table class="table align-middle">
                       <colgroup>
                         <col style="width: 1%;">
@@ -475,12 +479,12 @@
                           <th scope="col">Date</th>
                           <th scope="col">Type</th>
                           <th scope="col">Filename</th>
-                          <th scope="col">Logs</th>
+                          <th scope="col"></th>
                         </tr>
                       </thead>
                       <tbody>
                         <tr v-for="item in dicomizations">
-                          <td>
+                          <td class="text-nowrap">
                             <span class="badge bg-success" v-if="item.is_success">success</span>
                             <span class="badge bg-danger" v-if="item.is_failure">failure</span>
                             <span class="badge bg-secondary" v-if="!item.is_success && !item.is_failure">{{item.status.toLowerCase()}}</span>
@@ -488,8 +492,13 @@
                           <td class="text-nowrap">{{item.date}}</td>
                           <td>{{item.type}}</td>
                           <td>{{item.name}}</td>
-                          <td>
-                            <button class="btn btn-sm btn-primary ms-2">
+                          <td class="text-nowrap text-end">
+                            <button class="btn btn-sm btn-danger" v-if="!item.is_success && !item.is_failure"
+                                    data-bs-toggle="tooltip" data-bs-placement="top" title="Cancel the DICOM-ization">
+                              <i class="fa fa-trash" @click="cancelDicomization(item)"></i>
+                            </button>
+                            <button class="btn btn-sm btn-primary"
+                                    data-bs-toggle="tooltip" data-bs-placement="top" title="Open the DICOM-ization logs">
                               <i class="fa fa-file-text" @click="openLogs(item)"></i>
                             </button>
                           </td>
