@@ -1284,7 +1284,12 @@ public:
 static bool IsZipFile(const boost::filesystem::path& path)
 {
   std::string header;
+
+#if ORTHANC_FRAMEWORK_VERSION_IS_ABOVE(1, 12, 10)
   Orthanc::SystemToolbox::ReadFileRange(header, path, 0, 4, false /* don't throw exception */);
+#else
+  Orthanc::SystemToolbox::ReadFileRange(header, path.string(), 0, 4, false /* don't throw exception */);
+#endif
 
   if (header.size() != 4)
   {
@@ -1440,7 +1445,12 @@ private:
       }
 
       std::string content;
+
+#if ORTHANC_FRAMEWORK_VERSION_IS_ABOVE(1, 12, 10)
       Orthanc::SystemToolbox::ReadFile(content, iterator->path());
+#else
+      Orthanc::SystemToolbox::ReadFile(content, iterator->path().string());
+#endif
 
       if (!content.empty())
       {
@@ -1545,11 +1555,20 @@ public:
     PrepareArguments(args);
 
     args.push_back("--dataset");
+
+#if ORTHANC_FRAMEWORK_VERSION_IS_ABOVE(1, 12, 10)
     args.push_back(dataset.GetPath().string());
+#else
+    args.push_back(dataset.GetPath());
+#endif
 
     if (unzip.get() == NULL)
     {
+#if ORTHANC_FRAMEWORK_VERSION_IS_ABOVE(1, 12, 10)
       args.push_back(upload->GetPath().string());
+#else
+      args.push_back(upload->GetPath());
+#endif
     }
     else
     {
@@ -1754,10 +1773,12 @@ public:
     return false;
   }
 
+#if ORTHANC_FRAMEWORK_VERSION_IS_ABOVE(1, 12, 10)
   virtual void SetUserData(const Json::Value& userData) ORTHANC_OVERRIDE
   {
     throw Orthanc::OrthancException(Orthanc::ErrorCode_NotImplemented);
   }
+#endif
 };
 
 

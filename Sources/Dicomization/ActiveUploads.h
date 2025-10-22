@@ -27,6 +27,7 @@
 #include <TemporaryFile.h>
 
 #include <boost/thread/mutex.hpp>
+#include <map>
 
 
 class ActiveUploads : public boost::noncopyable

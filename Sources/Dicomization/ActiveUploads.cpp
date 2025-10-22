@@ -28,6 +28,7 @@
 
 #include <boost/iostreams/device/file_descriptor.hpp>
 #include <boost/iostreams/stream.hpp>
+#include <boost/filesystem.hpp>
 #include <fstream>
 
 
@@ -46,7 +47,7 @@ private:
   boost::posix_time::ptime                 lastUpdate_;
 
 public:
-  Upload(uint64_t fileSize) :
+  explicit Upload(uint64_t fileSize) :
     file_(new Orthanc::TemporaryFile),
     pos_(0),
     fileSize_(fileSize),
