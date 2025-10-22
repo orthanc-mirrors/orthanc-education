@@ -26,6 +26,8 @@
 
 #include "ActiveUploads.h"
 
+#include <OrthancException.h>
+
 
 void DicomizationJob::Worker(DicomizationJob* that)
 {
