@@ -189,10 +189,16 @@ class Orthanc(unittest.TestCase):
         for headers in AnyUserHeaders():
             session = requests.session()
             session.cookies.clear()
-            session.cookies.set('orthanc-education-user', 'a', domain = 'localhost.local')
-            session.cookies.set('orthanc-education-oidc', 'b', domain = 'localhost.local')
-            session.cookies.set('orthanc-education-lti', 'c', domain = 'localhost.local')
-            session.cookies.set('orthanc-education-nope', 'd', domain = 'localhost.local')
+
+            if args.server == 'localhost':
+                domain = 'localhost.local'
+            else:
+                domain = args.server
+
+            session.cookies.set('orthanc-education-user', 'a', domain = domain)
+            session.cookies.set('orthanc-education-oidc', 'b', domain = domain)
+            session.cookies.set('orthanc-education-lti', 'c', domain = domain)
+            session.cookies.set('orthanc-education-nope', 'd', domain = domain)
 
             r = session.get(URL + '/education/do-logout', headers = headers)
 
@@ -605,7 +611,7 @@ class Orthanc(unittest.TestCase):
 
         pixelData = base64.b64encode(content).decode('ascii')
 
-        return requests.post('http://localhost:8042/tools/create-dicom',
+        return requests.post(URL + '/tools/create-dicom',
                              json.dumps({
                                  'Content' : 'data:image/png;base64,%s' % pixelData,
                                  'Tags' : {
