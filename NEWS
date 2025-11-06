@@ -2,6 +2,7 @@ Pending changes in the mainline
 ===============================
 
 * Fix DICOM-ization of MRXS files from MIRAX
+* Display the image title in the whole-slide imaging viewer
 
 
 Version 1.0 (2025-10-22)
