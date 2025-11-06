@@ -54,18 +54,21 @@ namespace OrthancDatabase
 
   std::string GenerateStudyViewerUrl(ViewerType viewer,
                                      const std::string& studyId,
-                                     const std::string& studyInstanceUid);
+                                     const std::string& studyInstanceUid,
+                                     const std::string& description);
 
   std::string GenerateSeriesViewerUrl(ViewerType viewer,
                                       const std::string& seriesId,
                                       const std::string& studyInstanceUid,
-                                      const std::string& seriesInstanceUid);
+                                      const std::string& seriesInstanceUid,
+                                      const std::string& description);
 
   std::string GenerateInstanceViewerUrl(ViewerType viewer,
                                         const std::string& instanceId,
                                         const std::string& studyInstanceUid,
                                         const std::string& seriesInstanceUid,
-                                        const std::string& sopInstanceUid);
+                                        const std::string& sopInstanceUid,
+                                        const std::string& description);
 
   std::string GenerateViewerUrl(ViewerType viewer,
                                 const std::map<std::string, std::string>& resource);

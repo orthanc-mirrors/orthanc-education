@@ -435,11 +435,27 @@ static bool LookupSopInstanceUid(std::string& resourceId,
 }
 
 
+static std::string FormatWSITitle(const std::string& title)
+{
+  if (title.empty())
+  {
+    return "";
+  }
+  else
+  {
+    std::string tmp;
+    Orthanc::Toolbox::UriEncode(tmp, title);
+    return "&description=" + tmp;
+  }
+}
+
+
 namespace OrthancDatabase
 {
   std::string GenerateStudyViewerUrl(ViewerType viewer,
                                      const std::string& studyId,
-                                     const std::string& studyInstanceUid)
+                                     const std::string& studyInstanceUid,
+                                     const std::string& title)
   {
     switch (viewer)
     {
@@ -470,7 +486,8 @@ namespace OrthancDatabase
   std::string GenerateSeriesViewerUrl(ViewerType viewer,
                                       const std::string& seriesId,
                                       const std::string& studyInstanceUid,
-                                      const std::string& seriesInstanceUid)
+                                      const std::string& seriesInstanceUid,
+                                      const std::string& title)
   {
     switch (viewer)
     {
@@ -478,7 +495,7 @@ namespace OrthancDatabase
         return "stone-webviewer/index.html?study=" + studyInstanceUid + "&series=" + seriesInstanceUid;
 
       case ViewerType_WholeSlideImaging:
-        return "wsi/app/viewer.html?series=" + seriesId;
+        return "wsi/app/viewer.html?series=" + seriesId + FormatWSITitle(title);
 
       case ViewerType_VolView:
         return "volview/index.html?names=[archive.zip]&urls=[../series/" + seriesId + "/archive]";
@@ -493,12 +510,13 @@ namespace OrthancDatabase
                                         const std::string& instanceId,
                                         const std::string& studyInstanceUid,
                                         const std::string& seriesInstanceUid,
-                                        const std::string& sopInstanceUid)
+                                        const std::string& sopInstanceUid,
+                                        const std::string& title)
   {
     switch (viewer)
     {
       case ViewerType_WholeSlideImaging:
-        return "wsi/app/viewer.html?instance=" + instanceId;
+        return "wsi/app/viewer.html?instance=" + instanceId + FormatWSITitle(title);
 
       default:
         throw Orthanc::OrthancException(Orthanc::ErrorCode_NotImplemented);
@@ -517,20 +535,23 @@ namespace OrthancDatabase
       case Orthanc::ResourceType_Study:
         return GenerateStudyViewerUrl(viewer,
                                       HttpToolbox::ReadMandatoryString(resource, "resource-id"),
-                                      HttpToolbox::ReadMandatoryString(resource, "study-instance-uid"));
+                                      HttpToolbox::ReadMandatoryString(resource, "study-instance-uid"),
+                                      HttpToolbox::ReadMandatoryString(resource, "title"));
 
       case Orthanc::ResourceType_Series:
         return GenerateSeriesViewerUrl(viewer,
                                        HttpToolbox::ReadMandatoryString(resource, "resource-id"),
                                        HttpToolbox::ReadMandatoryString(resource, "study-instance-uid"),
-                                       HttpToolbox::ReadMandatoryString(resource, "series-instance-uid"));
+                                       HttpToolbox::ReadMandatoryString(resource, "series-instance-uid"),
+                                       HttpToolbox::ReadMandatoryString(resource, "title"));
 
       case Orthanc::ResourceType_Instance:
         return GenerateInstanceViewerUrl(viewer,
                                          HttpToolbox::ReadMandatoryString(resource, "resource-id"),
                                          HttpToolbox::ReadMandatoryString(resource, "study-instance-uid"),
                                          HttpToolbox::ReadMandatoryString(resource, "series-instance-uid"),
-                                         HttpToolbox::ReadMandatoryString(resource, "sop-instance-uid"));
+                                         HttpToolbox::ReadMandatoryString(resource, "sop-instance-uid"),
+                                         HttpToolbox::ReadMandatoryString(resource, "title"));
 
       default:
         throw Orthanc::OrthancException(Orthanc::ErrorCode_NotImplemented);
