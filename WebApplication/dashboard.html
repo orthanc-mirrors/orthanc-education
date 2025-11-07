@@ -425,29 +425,39 @@
                           </select>
                         </div>
                       </div>
-                      <div class="mb-3" v-if="isUploadAvailable">
-                        <label for="dicomizationFile" class="form-label">File to upload:</label>
-                        <input class="form-control" type="file" id="dicomizationFile">
+                      <div class="row mb-3" v-if="isUploadAvailable">
+                        <label for="dicomizationFile" class="col-sm-4 form-label">File to upload:</label>
+                        <div class="col-sm-8">
+                          <input class="form-control" type="file" id="dicomizationFile">
+                        </div>
                       </div>
-                      <div class="mb-3" v-if="isDicomizationWSI">
-                        <label for="dicomizationColor" class="form-label">Background color:&nbsp;&nbsp;</label>
-                        <select id="dicomizationColor" class="form-select" v-model="dicomizationBackgroundColor">
-                          <option value="white">White</option>
-                          <option value="black">Black</option>
-                        </select>
+                      <div class="row mb-3" v-if="isDicomizationWSI">
+                        <label for="dicomizationColor" class="col-sm-4 form-label">Background color:&nbsp;&nbsp;</label>
+                        <div class="col-sm-8">
+                          <select id="dicomizationColor" class="form-select" v-model="dicomizationBackgroundColor">
+                            <option value="white">White</option>
+                            <option value="black">Black</option>
+                          </select>
+                        </div>
                       </div>
-                      <div class="mb-3" v-if="isDicomizationWSI">
-                        <input class="form-check-input" type="checkbox" id="dicomizationOpenSlide" v-model="dicomizationOpenSlide">&nbsp;&nbsp;
-                        <label for="dicomizationOpenSlide" class="form-label">Force OpenSlide (slower, use if import does not succeed)</label>
+                      <div class="row mb-3" v-if="isDicomizationWSI">
+                        <div class="col-sm-8 offset-sm-4">
+                          <input class="form-check-input" type="checkbox" id="dicomizationOpenSlide" v-model="dicomizationOpenSlide">&nbsp;&nbsp;
+                          <label for="dicomizationOpenSlide" class="form-label">Force OpenSlide (slower, use if import does not succeed)</label>
+                        </div>
                       </div>
-                      <div class="mb-3" v-if="isDicomizationWSI">
-                        <input class="form-check-input" type="checkbox" id="dicomizationPyramid" v-model="dicomizationPyramid">&nbsp;&nbsp;
-                        <label for="dicomizationPyramid" class="form-label">Reconstruct pyramid (better, but may result in larger files)</label>
+                      <div class="row mb-3" v-if="isDicomizationWSI">
+                        <div class="col-sm-8 offset-sm-4">
+                          <input class="form-check-input" type="checkbox" id="dicomizationPyramid" v-model="dicomizationPyramid">&nbsp;&nbsp;
+                          <label for="dicomizationPyramid" class="form-label">Reconstruct pyramid (better, but may result in larger files)</label>
+                        </div>
                       </div>
-                      <p v-if="isUploadAvailable">
-                        <button v-if="!uploading" type="button" class="btn btn-lg btn-primary" @click="upload()">Upload</button>
-                        <button v-if="uploading" type="button" class="btn btn-lg btn-primary" disabled>Uploading: {{uploadProgress}} MB / {{uploadSize}} MB</button>
-                      </p>
+                      <div class="row mb-3" v-if="isUploadAvailable">
+                        <div class="col-sm-8 offset-sm-4">
+                          <button v-if="!uploading" type="button" class="btn btn-lg btn-primary" @click="upload()">Upload</button>
+                          <button v-if="uploading" type="button" class="btn btn-lg btn-primary" disabled>Uploading: {{uploadProgress}} MB / {{uploadSize}} MB</button>
+                        </div>
+                      </div>
                     </form>
                   </div>
                 </div>
