@@ -443,6 +443,16 @@ static std::string FormatWSITitle(const std::string& title)
   }
   else
   {
+    /**
+     * The following implementation is correct if title is an UTF-8
+     * string: "When a new URI scheme defines a component that
+     * represents textual data consisting of characters from the
+     * Universal Character Set [UCS], the data should first be encoded
+     * as octets according to the UTF-8 character encoding [STD63];
+     * then only those octets that do not correspond to characters in
+     * the unreserved set should be percent- encoded."
+     * https://www.rfc-editor.org/rfc/rfc3986
+     **/
     std::string tmp;
     Orthanc::Toolbox::UriEncode(tmp, title);
     return "&description=" + tmp;
