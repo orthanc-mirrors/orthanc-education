@@ -96,6 +96,7 @@ static AuthorizationStatus DoAuthorization(const AuthenticatedUser& user,
 
     // Public resources for the whole-slide imaging viewer
     boost::starts_with(uri, "/wsi/app/") ||
+    boost::starts_with(uri, "/wsi/libs/") ||   // New in release 3.3 of WSI
 
     // Public resources for the Kitware VolView plugin
     boost::starts_with(uri, "/volview/") ||
