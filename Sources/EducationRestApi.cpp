@@ -1325,6 +1325,20 @@ void StartDicomization(OrthancPluginRestOutput* output,
         dicomizer->SetStudyDescription(Orthanc::SerializationToolbox::ReadString(body, "study-description"));
         dicomizer->SetForceOpenSlide(Orthanc::SerializationToolbox::ReadBoolean(body, "force-openslide"));
         dicomizer->SetReconstructPyramid(Orthanc::SerializationToolbox::ReadBoolean(body, "reconstruct-pyramid"));
+
+        static const char* const IMAGED_WIDTH = "imaged-width";
+        if (body.isMember(IMAGED_WIDTH))
+        {
+          const Json::Value& width = body[IMAGED_WIDTH];
+          if (width.isNumeric())
+          {
+            dicomizer->SetImagedVolumeWidth(width.asFloat());
+          }
+          else
+          {
+            throw Orthanc::OrthancException(Orthanc::ErrorCode_BadFileFormat);
+          }
+        }
       }
       catch (Orthanc::OrthancException&)
       {

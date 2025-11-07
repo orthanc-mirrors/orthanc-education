@@ -40,6 +40,10 @@ private:
   bool         forceOpenSlide_;
   bool         reconstructPyramid_;
 
+  // New in release 1.1
+  bool         imagedVolumeAutodetect_;
+  float        imagedVolumeWidth_;
+
   static bool Unzip(TemporaryDirectory& target,
                     std::string& unzipMaster,
                     const Orthanc::TemporaryFile& zip,
@@ -76,6 +80,8 @@ public:
   {
     reconstructPyramid_ = reconstruct;
   }
+
+  void SetImagedVolumeWidth(float width);
 
   virtual std::string GetName() ORTHANC_OVERRIDE
   {

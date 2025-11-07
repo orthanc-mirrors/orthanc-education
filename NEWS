@@ -1,8 +1,10 @@
 Pending changes in the mainline
 ===============================
 
-* Fix DICOM-ization of MRXS files from MIRAX
-* Display the image title in the whole-slide imaging viewer
+* Enhancements to DICOM-ization of whole-slide images:
+  - The imaged volume width can be specified in the Web interface
+  - Display the image title in the whole-slide imaging viewer
+  - Fixed support of MRXS files from MIRAX
 
 
 Version 1.0 (2025-10-22)

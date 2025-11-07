@@ -32,6 +32,7 @@
 #include <SystemToolbox.h>
 
 #include <boost/algorithm/string/predicate.hpp>
+#include <boost/lexical_cast.hpp>
 #include <boost/thread.hpp>
 
 
@@ -116,6 +117,13 @@ void WholeSlideImagingDicomizer::PrepareArguments(std::list<std::string>& args) 
     args.push_back("--openslide");
     args.push_back(openslide);
   }
+
+  // New in release 1.1
+  if (!imagedVolumeAutodetect_)
+  {
+    args.push_back("--imaged-width");
+    args.push_back(boost::lexical_cast<std::string>(imagedVolumeWidth_));
+  }
 }
 
 
@@ -124,6 +132,13 @@ bool WholeSlideImagingDicomizer::ExecuteDicomizer(const std::string& dicomizer,
                                                   SharedLogs& logs,
                                                   const bool& stopped)
 {
+  logs.Append("$ " + dicomizer);
+  for (std::list<std::string>::const_iterator it = args.begin(); it != args.end(); ++it)
+  {
+    logs.Append(" " + *it);
+  }
+  logs.Append("\n\n");
+
   ProcessRunner runner;
   runner.Start(dicomizer, args, ProcessRunner::Stream_Error);
 
@@ -195,7 +210,9 @@ WholeSlideImagingDicomizer::WholeSlideImagingDicomizer() :
   backgroundGreen_(255),
   backgroundBlue_(255),
   forceOpenSlide_(false),
-  reconstructPyramid_(true)
+  reconstructPyramid_(true),
+  imagedVolumeAutodetect_(true),
+  imagedVolumeWidth_(15.0f)
 {
 }
 
@@ -207,6 +224,21 @@ void WholeSlideImagingDicomizer::SetBackgroundColor(uint8_t red,
   backgroundRed_ = red;
   backgroundGreen_ = green;
   backgroundBlue_ = blue;
+}
+
+
+void WholeSlideImagingDicomizer::SetImagedVolumeWidth(float width)
+{
+  if (width <= 0)
+  {
+    throw Orthanc::OrthancException(Orthanc::ErrorCode_ParameterOutOfRange, "The imaged volume width must be positive, got: " +
+                                    boost::lexical_cast<std::string>(imagedVolumeWidth_));
+  }
+  else
+  {
+    imagedVolumeAutodetect_ = false;
+    imagedVolumeWidth_ = width;
+  }
 }
 
 
