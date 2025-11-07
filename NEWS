@@ -1,6 +1,10 @@
 Pending changes in the mainline
 ===============================
 
+
+Version 1.1 (2025-11-07)
+========================
+
 * Enhancements to DICOM-ization of whole-slide images:
   - The imaged volume width can be specified in the Web interface
   - Display the image title in the whole-slide imaging viewer
