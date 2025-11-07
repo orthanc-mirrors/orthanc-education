@@ -233,8 +233,8 @@ class Orthanc(unittest.TestCase):
 
 
     def check_url(self, url, request):
-            self.assertEqual(url, request.json() ['relative_url'])
-            self.assertEqual('http://my-public/%s' % request.json() ['relative_url'], request.json() ['absolute_url'])
+        self.assertEqual(url, request.json() ['relative_url'])
+        self.assertEqual('http://my-public/%s' % request.json() ['relative_url'], request.json() ['absolute_url'])
 
 
     def test_list_project_url(self):
@@ -252,6 +252,7 @@ class Orthanc(unittest.TestCase):
                     'study-instance-uid' : 'tata',
                     'resource-id' : 'toto',
                     'level' : 'Study',
+                    'title' : 'Hello',
                 }
             }
 
@@ -285,6 +286,7 @@ class Orthanc(unittest.TestCase):
                     'series-instance-uid' : 'tutu',
                     'resource-id' : 'toto',
                     'level' : 'Series',
+                    'title' : 'Hello',
                 }
             }
 
@@ -294,7 +296,7 @@ class Orthanc(unittest.TestCase):
 
             body['viewer'] = 'wsi'
             r = requests.post(URL + '/education/api/resource-viewer-url', json.dumps(body), headers = headers)
-            self.check_url('wsi/app/viewer.html?series=toto', r)
+            self.check_url('wsi/app/viewer.html?series=toto&description=Hello', r)
 
             body['viewer'] = 'volview'
             r = requests.post(URL + '/education/api/resource-viewer-url', json.dumps(body), headers = headers)
@@ -307,12 +309,13 @@ class Orthanc(unittest.TestCase):
                     'sop-instance-uid' : 'titi',
                     'resource-id' : 'toto',
                     'level' : 'Instance',
+                    'title' : 'Hello',
                 }
             }
 
             body['viewer'] = 'wsi'
             r = requests.post(URL + '/education/api/resource-viewer-url', json.dumps(body), headers = headers)
-            self.check_url('wsi/app/viewer.html?instance=toto', r)
+            self.check_url('wsi/app/viewer.html?instance=toto&description=Hello', r)
 
 
     def test_create_project(self):
