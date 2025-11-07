@@ -440,8 +440,22 @@
                           </select>
                         </div>
                       </div>
+                      <div class="row mb-3" v-if="isUploadAvailable">
+                        <label for="dicomizationImagedAutodetect" class="col-sm-4 form-label">Imaged volume size for scale:</label>
+                        <div class="col-sm-8">
+                          <input class="form-check-input" type="checkbox" id="dicomizationImagedAutodetect" v-model="dicomizationImagedAutodetect">&nbsp;&nbsp;
+                          <label for="dicomizationImagedAutodetect" class="form-label">Autodetect (if not available, defaults to an imaged width of 15mm)</label>
+                        </div>
+                      </div>
+                      <div class="row mb-3" v-if="isUploadAvailable && !dicomizationImagedAutodetect">
+                        <label for="dicomizationImagedWidth" class="col-sm-4 form-label">Imaged width (in mm):</label>
+                        <div class="col-sm-8">
+                          <input class="form-control" type="text" id="dicomizationImagedWidth" v-model="dicomizationImagedWidth">
+                        </div>
+                      </div>
                       <div class="row mb-3" v-if="isDicomizationWSI">
-                        <div class="col-sm-8 offset-sm-4">
+                        <label class="col-sm-4">Advanced options:</label>
+                        <div class="col-sm-8">
                           <input class="form-check-input" type="checkbox" id="dicomizationOpenSlide" v-model="dicomizationOpenSlide">&nbsp;&nbsp;
                           <label for="dicomizationOpenSlide" class="form-label">Force OpenSlide (slower, use if import does not succeed)</label>
                         </div>

@@ -76,6 +76,8 @@ var app = new Vue({
       uploadProgress: 0,
       uploadSize: 0,
       dicomizationBackgroundColor: 'white',
+      dicomizationImagedAutodetect: true,
+      dicomizationImagedWidth: '15',
       dicomizationOpenSlide: false,
       dicomizationPyramid: true
     }
@@ -536,6 +538,14 @@ var app = new Vue({
       var dicomization = {
         'upload-id': uploadId,
         'type' : this.dicomizationType
+      }
+
+      if (!this.dicomizationImagedAutodetect) {
+        if (isNaN(this.dicomizationImagedWidth)) {
+          alert('Invalid value for the imaged volume width, must be a float: ' + this.dicomizationImagedWidth);
+        } else {
+          dicomization['imaged-width'] = parseFloat(this.dicomizationImagedWidth);
+        }
       }
 
       if (this.dicomizationType == 'wsi') {
