@@ -1,9 +1,9 @@
-# SPDX-FileCopyrightText: 2024-2025 Sebastien Jodogne, ICTEAM UCLouvain, Belgium
+# SPDX-FileCopyrightText: 2024-2026 Sebastien Jodogne, EPL UCLouvain, Belgium
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 
 # Orthanc for Education
-# Copyright (C) 2024-2025 Sebastien Jodogne, EPL UCLouvain, Belgium
+# Copyright (C) 2024-2026 Sebastien Jodogne, EPL UCLouvain, Belgium
 #
 # This program is free software: you can redistribute it and/or
 # modify it under the terms of the GNU Affero General Public License
