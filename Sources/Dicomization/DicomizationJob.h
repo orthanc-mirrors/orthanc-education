@@ -99,6 +99,12 @@ public:
   virtual void SetUserData(const Json::Value& userData) ORTHANC_OVERRIDE;
 #endif
 
+#if ORTHANC_FRAMEWORK_VERSION_IS_ABOVE(1, 12, 10)
+  virtual void LookupErrorPayload(Orthanc::ErrorPayload&) const ORTHANC_OVERRIDE
+  {
+  }
+#endif
+
   static Orthanc::JobsEngine& GetJobsEngine();
 
   static void FinalizeJobsEngine();
