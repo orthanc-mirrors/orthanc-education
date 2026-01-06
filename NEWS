@@ -1,6 +1,8 @@
 Pending changes in the mainline
 ===============================
 
+* Fix opening of viewers if Orthanc is not branched at the root of the server
+
 
 Version 1.1 (2025-11-07)
 ========================

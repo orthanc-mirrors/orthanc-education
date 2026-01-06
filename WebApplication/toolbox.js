@@ -43,7 +43,7 @@ function hasSubstring(description, pattern) {
 
 
 function interpretRelativeUrl(relative_url) {
-  return new URL(relative_url, new URL('../..', window.location.origin) /* this is the base URL */);
+  return new URL(relative_url, new URL('../..', window.location) /* this is the base URL of Orthanc */);
 }
 
 
